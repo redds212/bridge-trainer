@@ -1,14 +1,23 @@
-import { useState, useCallback } from 'react';
-import type { Deal, GamePhase, HandData, HandCards, TrickStep } from '../types';
+import { useState, useCallback, useRef } from 'react';
+import type { Deal, GamePhase, HandCards, Seat, TrickStep } from '../types';
 
 export interface GameState {
   phase: GamePhase;
   currentStep: number;
-  visibleTrick: Partial<Record<string, string>>;
-  currentTrickLeader: string | null;
+  visibleTrick: Partial<Record<Seat, string>>;
+  currentTrickLeader: Seat | null;
   tricks: TrickStep[];
   hands: Deal['initialHands'];
   trickScores: { NS: number; EW: number };
+  isAnimating: boolean;
+}
+
+const CLOCKWISE: Seat[] = ['N', 'E', 'S', 'W'];
+const CARD_DELAY_MS = 200;
+
+function clockwiseOrder(leader: Seat): Seat[] {
+  const i = CLOCKWISE.indexOf(leader);
+  return [...CLOCKWISE.slice(i), ...CLOCKWISE.slice(0, i)];
 }
 
 function initialState(deal: Deal): GameState {
@@ -20,6 +29,7 @@ function initialState(deal: Deal): GameState {
     tricks: [],
     hands: deal.initialHands,
     trickScores: { NS: 0, EW: 0 },
+    isAnimating: false,
   };
 }
 
@@ -27,15 +37,22 @@ export function useGameState(deal: Deal | null) {
   const [state, setState] = useState<GameState | null>(
     deal ? initialState(deal) : null
   );
+  const timerIds = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  const cancelTimers = useCallback(() => {
+    timerIds.current.forEach(clearTimeout);
+    timerIds.current = [];
+  }, []);
 
   const reset = useCallback((d: Deal) => {
+    cancelTimers();
     setState(initialState(d));
-  }, []);
+  }, [cancelTimers]);
 
   const next = useCallback(() => {
     if (!deal || !state) return;
-    const { phase, currentStep } = state;
-    if (phase !== 'intro') return;
+    const { phase, currentStep, isAnimating } = state;
+    if (phase !== 'intro' || isAnimating) return;
 
     const seq = deal.introSequence;
     const stepData = seq[currentStep];
@@ -45,57 +62,66 @@ export function useGameState(deal: Deal | null) {
     }
 
     const cards = stepData.cards ?? {};
-    const seats = Object.keys(cards) as Array<keyof typeof cards>;
+    const leader = stepData.leader as Seat;
+    // Cards in clockwise order starting from leader, filtered to those present in this step
+    const ordered = clockwiseOrder(leader).filter(s => s in cards);
 
-    // If this step has all 4 seats, it's a completed trick; add to tricks
-    const isCompleteTrick = seats.length === 4;
-    const newTrick = { ...state.visibleTrick, ...cards };
     const newStep = currentStep + 1;
     const isLast = newStep >= seq.length;
+    const isCompleteTrick = ordered.length === 4;
 
-    setState(s => {
-      if (!s) return s;
-      const tricks = isCompleteTrick ? [...s.tricks, stepData] : s.tricks;
-      const scores = isCompleteTrick && stepData.winner
-        ? {
-            NS: s.trickScores.NS + (['N', 'S'].includes(stepData.winner) ? 1 : 0),
-            EW: s.trickScores.EW + (['E', 'W'].includes(stepData.winner) ? 1 : 0),
+    // Clear center and lock NEXT during animation
+    setState(s => s ? { ...s, isAnimating: true, visibleTrick: {}, currentTrickLeader: leader } : s);
+
+    cancelTimers();
+    ordered.forEach((seat, i) => {
+      const isLastCard = i === ordered.length - 1;
+      const id = setTimeout(() => {
+        setState(s => {
+          if (!s) return s;
+          const newTrick = { ...s.visibleTrick, [seat]: cards[seat] };
+          if (isLastCard) {
+            const tricks = isCompleteTrick ? [...s.tricks, stepData] : s.tricks;
+            const scores = isCompleteTrick && stepData.winner
+              ? {
+                  NS: s.trickScores.NS + (['N', 'S'].includes(stepData.winner) ? 1 : 0),
+                  EW: s.trickScores.EW + (['E', 'W'].includes(stepData.winner) ? 1 : 0),
+                }
+              : s.trickScores;
+            return {
+              ...s,
+              visibleTrick: newTrick,
+              currentStep: newStep,
+              tricks,
+              trickScores: scores,
+              phase: isLast ? 'decision' : 'intro',
+              isAnimating: false,
+            };
           }
-        : s.trickScores;
-
-      return {
-        ...s,
-        currentStep: newStep,
-        visibleTrick: isCompleteTrick ? cards : newTrick,
-        currentTrickLeader: stepData.leader,
-        tricks,
-        trickScores: scores,
-        phase: isLast ? 'decision' : 'intro',
-      };
+          return { ...s, visibleTrick: newTrick };
+        });
+      }, (i + 1) * CARD_DELAY_MS);
+      timerIds.current.push(id);
     });
-  }, [deal, state]);
+  }, [deal, state, cancelTimers]);
 
   const prev = useCallback(() => {
-    if (!deal || !state || state.currentStep === 0) return;
+    if (!deal || !state || state.currentStep === 0 || state.isAnimating) return;
+    cancelTimers();
     const prevStep = state.currentStep - 1;
     const seq = deal.introSequence;
-
     setState(s => {
       if (!s) return s;
-      const cards = prevStep > 0 ? seq[prevStep - 1]?.cards ?? {} : {};
-      return {
-        ...s,
-        currentStep: prevStep,
-        visibleTrick: cards,
-        phase: 'intro',
-      };
+      const prevCards = prevStep > 0 ? seq[prevStep - 1]?.cards ?? {} : {};
+      return { ...s, currentStep: prevStep, visibleTrick: prevCards, phase: 'intro', isAnimating: false };
     });
-  }, [deal, state]);
+  }, [deal, state, cancelTimers]);
 
   const rewind = useCallback(() => {
     if (!deal) return;
+    cancelTimers();
     setState(initialState(deal));
-  }, [deal]);
+  }, [deal, cancelTimers]);
 
   const revealSolution = useCallback(() => {
     if (!deal || !state) return;

@@ -1,21 +1,60 @@
 import { useState, useEffect } from 'react';
-import type { Deal, SRSEntry } from './types';
-import deals from './data/dealsMock.json';
-import { useSRS } from './hooks/useSRS';
+import type { SRSEntry } from './types';
+import { AuthProvider, useAuth } from './auth/AuthContext';
+import { LoginPage } from './auth/LoginPage';
+import { AdminPanel } from './admin/AdminPanel';
+import { useSRS, isReviewDue } from './hooks/useSRS';
+import { useDeals } from './hooks/useDeals';
 import { useGameState } from './hooks/useGameState';
 import { Sidebar } from './components/Sidebar';
 import { BridgeTable } from './components/BridgeTable';
 import { ControlPanel } from './components/ControlPanel';
 import { DecisionPanel } from './components/DecisionPanel';
-import { isReviewDue } from './hooks/useSRS';
-
-const allDeals = deals as Deal[];
+import type { Deal } from './types';
 
 export default function App() {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const { getEntry, applyResult } = useSRS();
+  return (
+    <AuthProvider>
+      <AppShell />
+    </AuthProvider>
+  );
+}
 
-  const selectedDeal = allDeals.find(d => d.id === selectedId) ?? null;
+function AppShell() {
+  const { user } = useAuth();
+  const [view, setView] = useState<'trainer' | 'admin'>('trainer');
+  const dealsHook = useDeals();
+
+  if (!user) return <LoginPage />;
+
+  if (view === 'admin' && user.role === 'admin') {
+    return (
+      <AdminPanel
+        baseDeals={dealsHook.baseDeals}
+        customDeals={dealsHook.customDeals}
+        hiddenIds={dealsHook.hiddenIds}
+        onAdd={dealsHook.addDeal}
+        onDelete={dealsHook.deleteDeal}
+        onRestore={dealsHook.restoreDeal}
+        onBack={() => setView('trainer')}
+      />
+    );
+  }
+
+  return (
+    <TrainerApp
+      deals={dealsHook.deals}
+      userId={user.id}
+      onAdmin={user.role === 'admin' ? () => setView('admin') : undefined}
+    />
+  );
+}
+
+function TrainerApp({ deals, userId, onAdmin }: { deals: Deal[]; userId: string; onAdmin?: () => void }) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { getEntry, applyResult } = useSRS(userId);
+
+  const selectedDeal = deals.find(d => d.id === selectedId) ?? null;
   const { state, next, prev, rewind, revealSolution, setPhase, reset } = useGameState(selectedDeal);
 
   useEffect(() => {
@@ -37,26 +76,27 @@ export default function App() {
   };
 
   const handleNextDeal = () => {
-    const idx = allDeals.findIndex(d => d.id === selectedId);
-    const nextDeal = allDeals[idx + 1];
+    const idx = deals.findIndex(d => d.id === selectedId);
+    const nextDeal = deals[idx + 1];
     if (nextDeal) handleSelect(nextDeal.id);
   };
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-950">
       <Sidebar
-        deals={allDeals}
+        deals={deals}
         selectedId={selectedId}
         getEntry={getEntry}
         onSelect={handleSelect}
+        onAdmin={onAdmin}
       />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {!selectedDeal || !state ? (
-          <WelcomeScreen onSelect={handleSelect} getEntry={getEntry} />
+          <WelcomeScreen deals={deals} onSelect={handleSelect} getEntry={getEntry} />
         ) : (
           <>
-            <div className="flex-1 p-4 min-h-0 flex flex-col">
+            <div className="flex-1 p-3 min-h-0 flex flex-col">
               <BridgeTable deal={selectedDeal} state={state} />
             </div>
 
@@ -68,6 +108,7 @@ export default function App() {
               phase={state.phase}
               currentStep={state.currentStep}
               totalSteps={selectedDeal.introSequence.length}
+              isAnimating={state.isAnimating}
               onNext={next}
               onPrev={prev}
               onRewind={rewind}
@@ -88,8 +129,8 @@ export default function App() {
   );
 }
 
-function WelcomeScreen({ onSelect, getEntry }: { onSelect: (id: string) => void; getEntry: (id: string) => SRSEntry }) {
-  const due = allDeals.filter(d => isReviewDue(getEntry(d.id)));
+function WelcomeScreen({ deals, onSelect, getEntry }: { deals: Deal[]; onSelect: (id: string) => void; getEntry: (id: string) => SRSEntry }) {
+  const due = deals.filter(d => isReviewDue(getEntry(d.id)));
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-8 text-center gap-6">
@@ -120,7 +161,7 @@ function WelcomeScreen({ onSelect, getEntry }: { onSelect: (id: string) => void;
       )}
 
       <div className="grid grid-cols-3 gap-4 max-w-lg w-full">
-        {allDeals.slice(0, 3).map(d => (
+        {deals.slice(0, 3).map(d => (
           <button
             key={d.id}
             onClick={() => onSelect(d.id)}

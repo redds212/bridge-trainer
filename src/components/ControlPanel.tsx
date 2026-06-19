@@ -4,15 +4,16 @@ interface Props {
   phase: GamePhase;
   currentStep: number;
   totalSteps: number;
+  isAnimating: boolean;
   onNext: () => void;
   onPrev: () => void;
   onRewind: () => void;
 }
 
-export function ControlPanel({ phase, currentStep, totalSteps, onNext, onPrev, onRewind }: Props) {
+export function ControlPanel({ phase, currentStep, totalSteps, isAnimating, onNext, onPrev, onRewind }: Props) {
   const atDecision = phase === 'decision' || phase === 'revealed' || phase === 'rated';
-  const canPrev = currentStep > 0 && phase === 'intro';
-  const canNext = !atDecision;
+  const canPrev = currentStep > 0 && phase === 'intro' && !isAnimating;
+  const canNext = !atDecision && !isAnimating;
 
   return (
     <div className="flex items-center justify-center gap-3 py-3">

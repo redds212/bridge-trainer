@@ -3,6 +3,7 @@ export type Suit = 'S' | 'H' | 'D' | 'C';
 export type SRSStatus = 'NEW' | 'LEARNING' | 'REVIEW' | 'MASTERED';
 export type Difficulty = 'Easy' | 'Medium' | 'Hard';
 export type GamePhase = 'intro' | 'decision' | 'revealed' | 'rated';
+export type UserRole = 'admin' | 'user';
 
 export interface HandCards {
   S: string;
@@ -12,7 +13,6 @@ export interface HandCards {
 }
 
 export type HiddenHand = { hidden: true };
-
 export type HandData = HandCards | HiddenHand;
 
 export interface TrickStep {
@@ -52,3 +52,11 @@ export interface SRSEntry {
 }
 
 export type SRSStore = Record<string, SRSEntry>;
+
+export interface User {
+  id: string;
+  username: string;
+  passwordHash: string;
+  role: UserRole;
+  createdAt: string;
+}

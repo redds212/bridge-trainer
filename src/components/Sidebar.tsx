@@ -1,11 +1,13 @@
 import type { Deal, SRSEntry, SRSStatus } from '../types';
 import { isReviewDue } from '../hooks/useSRS';
+import { useAuth } from '../auth/AuthContext';
 
 interface Props {
   deals: Deal[];
   selectedId: string | null;
   getEntry: (id: string) => SRSEntry;
   onSelect: (id: string) => void;
+  onAdmin?: () => void;
 }
 
 const STATUS_DOT: Record<SRSStatus, string> = {
@@ -28,7 +30,8 @@ const DIFF_BADGE: Record<string, string> = {
   Hard: 'text-red-400',
 };
 
-export function Sidebar({ deals, selectedId, getEntry, onSelect }: Props) {
+export function Sidebar({ deals, selectedId, getEntry, onSelect, onAdmin }: Props) {
+  const { user, logout } = useAuth();
   const dueToday = deals.filter(d => {
     const e = getEntry(d.id);
     return isReviewDue(e);
@@ -46,6 +49,32 @@ export function Sidebar({ deals, selectedId, getEntry, onSelect }: Props) {
         <h1 className="text-white font-bold text-sm tracking-wide">🃏 Trenażer Brydżowy</h1>
         <p className="text-slate-400 text-xs mt-0.5">System SRS</p>
       </div>
+
+      {/* User bar */}
+      {user && (
+        <div className="px-3 py-2 bg-slate-800/70 border-b border-slate-700 flex items-center justify-between gap-1">
+          <div className="min-w-0">
+            <div className="text-white text-xs font-medium truncate">{user.username}</div>
+            <div className="text-slate-500 text-[10px]">{user.role === 'admin' ? 'Administrator' : 'Użytkownik'}</div>
+          </div>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {user.role === 'admin' && onAdmin && (
+              <button
+                onClick={onAdmin}
+                className="text-[10px] px-2 py-1 bg-blue-900/40 text-blue-400 rounded hover:bg-blue-900/70 border border-blue-800/50 transition-colors"
+              >
+                Panel
+              </button>
+            )}
+            <button
+              onClick={logout}
+              className="text-[10px] px-2 py-1 bg-slate-700 text-slate-400 rounded hover:bg-slate-600 hover:text-slate-300 border border-slate-600 transition-colors"
+            >
+              Wyloguj
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Due today */}
       {dueToday.length > 0 && (

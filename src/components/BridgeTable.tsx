@@ -19,7 +19,7 @@ export function BridgeTable({ deal, state }: Props) {
       />
 
       {/* Bidding table — top right */}
-      <div className="absolute top-3 right-3 z-10 w-44">
+      <div className="absolute top-3 right-3 z-10 w-56">
         <BiddingTable bidding={deal.bidding} dealer={deal.dealer} />
       </div>
 
@@ -48,7 +48,7 @@ export function BridgeTable({ deal, state }: Props) {
       </div>
 
       {/* Cross layout: N top, S bottom, W left, E right */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 pt-20">
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 p-3 pt-16">
 
         {/* North */}
         <HandDisplay seat="N" hand={state.hands['N']} />
@@ -58,7 +58,7 @@ export function BridgeTable({ deal, state }: Props) {
           <HandDisplay seat="W" hand={state.hands['W']} />
 
           {/* Center: trick area */}
-          <div className="bg-felt-dark/60 rounded-xl border border-felt-dark w-24 h-24 flex items-center justify-center shadow-inner flex-shrink-0">
+          <div className="bg-felt-dark/60 rounded-xl border border-felt-dark w-28 h-28 flex items-center justify-center shadow-inner flex-shrink-0">
             <TrickDisplay
               visibleTrick={state.visibleTrick as Partial<Record<import('../types').Seat, string>>}
               leader={state.currentTrickLeader as import('../types').Seat | null}
