@@ -5,12 +5,27 @@ import { TrickDisplay } from './TrickDisplay';
 import { BiddingTable } from './BiddingTable';
 import { ContractBox } from './ContractBox';
 
+function buildPlayedCards(state: GameState): Set<string> {
+  const played = new Set<string>();
+  for (const trick of state.tricks) {
+    for (const card of Object.values(trick.cards)) {
+      if (card) played.add(card);
+    }
+  }
+  for (const card of Object.values(state.visibleTrick)) {
+    if (card) played.add(card);
+  }
+  return played;
+}
+
 interface Props {
   deal: Deal;
   state: GameState;
 }
 
 export function BridgeTable({ deal, state }: Props) {
+  const playedCards = buildPlayedCards(state);
+
   return (
     <div className="relative h-full w-full bg-felt rounded-xl border border-felt-dark shadow-2xl overflow-hidden">
       {/* Felt texture overlay */}
@@ -51,11 +66,11 @@ export function BridgeTable({ deal, state }: Props) {
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 p-3 pt-16">
 
         {/* North */}
-        <HandDisplay seat="N" hand={state.hands['N']} />
+        <HandDisplay seat="N" hand={state.hands['N']} playedCards={playedCards} />
 
         <div className="flex items-center gap-2">
           {/* West */}
-          <HandDisplay seat="W" hand={state.hands['W']} />
+          <HandDisplay seat="W" hand={state.hands['W']} playedCards={playedCards} />
 
           {/* Center: trick area */}
           <div className="bg-felt-dark/60 rounded-xl border border-felt-dark w-28 h-28 flex items-center justify-center shadow-inner flex-shrink-0">
@@ -66,11 +81,11 @@ export function BridgeTable({ deal, state }: Props) {
           </div>
 
           {/* East */}
-          <HandDisplay seat="E" hand={state.hands['E']} />
+          <HandDisplay seat="E" hand={state.hands['E']} playedCards={playedCards} />
         </div>
 
         {/* South */}
-        <HandDisplay seat="S" hand={state.hands['S']} />
+        <HandDisplay seat="S" hand={state.hands['S']} playedCards={playedCards} />
       </div>
     </div>
   );
