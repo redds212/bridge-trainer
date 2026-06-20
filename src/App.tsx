@@ -60,6 +60,7 @@ function AppShell() {
         onUpdate={dealsHook.updateDeal}
         onArchive={dealsHook.archiveDeal}
         onRestore={dealsHook.restoreDeal}
+        onDelete={dealsHook.deleteDeal}
         onBack={() => setView('trainer')}
       />
     );

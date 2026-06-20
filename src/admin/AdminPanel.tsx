@@ -18,6 +18,7 @@ interface Props {
   onUpdate: (id: string, deal: Deal) => Promise<OpResult>;
   onArchive: (id: string) => Promise<OpResult>;
   onRestore: (id: string) => Promise<OpResult>;
+  onDelete: (id: string) => Promise<OpResult>;
   onBack: () => void;
 }
 
@@ -34,12 +35,13 @@ function toDeal(r: DealRecord): Deal {
   return deal;
 }
 
-export function AdminPanel({ allDeals, loading, error, onAdd, onUpdate, onArchive, onRestore, onBack }: Props) {
+export function AdminPanel({ allDeals, loading, error, onAdd, onUpdate, onArchive, onRestore, onDelete, onBack }: Props) {
   const [builder, setBuilder] = useState<BuilderMode | null>(null);
   const [flash, setFlash] = useState('');
   const [flashErr, setFlashErr] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
 
   const showFlash = (msg: string) => { setFlash(msg); setTimeout(() => setFlash(''), 4000); };
@@ -186,13 +188,42 @@ export function AdminPanel({ allDeals, loading, error, onAdd, onUpdate, onArchiv
                       <td className="px-4 py-2.5 text-right">
                         <div className="flex gap-1.5 justify-end">
                           {deal.archived ? (
-                            <button
-                              onClick={() => runOp(() => onRestore(deal.id), 'Przywrócono.')}
-                              disabled={busy}
-                              className="text-xs px-2.5 py-1 bg-emerald-900/40 text-emerald-400 rounded hover:bg-emerald-900/70 transition-colors border border-emerald-800/50 disabled:opacity-50"
-                            >
-                              Przywróć
-                            </button>
+                            confirmDelete === deal.id ? (
+                              <>
+                                <span className="text-red-300 text-xs self-center mr-1">Usunąć na zawsze?</span>
+                                <button
+                                  onClick={async () => { setConfirmDelete(null); await runOp(() => onDelete(deal.id), 'Usunięto trwale.'); }}
+                                  disabled={busy}
+                                  className="text-xs px-2.5 py-1 bg-red-600 text-white rounded hover:bg-red-500 transition-colors disabled:opacity-50"
+                                >
+                                  Tak, usuń
+                                </button>
+                                <button
+                                  onClick={() => setConfirmDelete(null)}
+                                  className="text-xs px-2.5 py-1 bg-slate-700 text-slate-300 rounded hover:bg-slate-600 transition-colors border border-slate-600"
+                                >
+                                  Anuluj
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => runOp(() => onRestore(deal.id), 'Przywrócono.')}
+                                  disabled={busy}
+                                  className="text-xs px-2.5 py-1 bg-emerald-900/40 text-emerald-400 rounded hover:bg-emerald-900/70 transition-colors border border-emerald-800/50 disabled:opacity-50"
+                                >
+                                  Przywróć
+                                </button>
+                                <button
+                                  onClick={() => setConfirmDelete(deal.id)}
+                                  disabled={busy}
+                                  className="text-xs px-2.5 py-1 bg-red-900/40 text-red-400 rounded hover:bg-red-900/70 transition-colors border border-red-800/50 disabled:opacity-50"
+                                  title="Usuń trwale z bazy"
+                                >
+                                  Usuń trwale
+                                </button>
+                              </>
+                            )
                           ) : (
                             <>
                               {!deal.isBase && (

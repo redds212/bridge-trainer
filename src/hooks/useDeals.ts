@@ -102,6 +102,14 @@ export function useDeals() {
   const archiveDeal = useCallback((id: string) => setArchived(id, true), [setArchived]);
   const restoreDeal = useCallback((id: string) => setArchived(id, false), [setArchived]);
 
+  // Permanent removal (cascades to srs_progress). Irreversible.
+  const deleteDeal = useCallback(async (id: string): Promise<OpResult> => {
+    const { error } = await supabase.from('deals').delete().eq('id', id);
+    if (error) return { error: error.message };
+    await reload();
+    return {};
+  }, [reload]);
+
   // Active (non-archived) deals power the trainer / sidebar / panel.
   const deals: Deal[] = records.filter(r => !r.archived);
 
@@ -115,5 +123,6 @@ export function useDeals() {
     updateDeal,
     archiveDeal,
     restoreDeal,
+    deleteDeal,
   };
 }
