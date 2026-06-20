@@ -249,7 +249,7 @@ const mkInitial = (): St => ({
 interface Props {
   initialData?: Deal;
   isEdit?: boolean;
-  onSave: (deal: Deal) => void;
+  onSave: (deal: Deal) => Promise<{ error?: string }>;
   onCancel: () => void;
 }
 
@@ -259,6 +259,7 @@ export function DealBuilder({ initialData, isEdit, onSave, onCancel }: Props) {
   const [activeTrick, setActiveTrick] = useState<DraftTrick | null>(null);
   const [trickSeat, setTrickSeat] = useState<Seat | null>(null);
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const contract = `${st.contractLevel}${st.contractSuit}`;
   const contractSuitSym = st.contractSuit === 'NT' ? 'BA' : SUIT_SYM[st.contractSuit as Suit];
@@ -371,7 +372,7 @@ export function DealBuilder({ initialData, isEdit, onSave, onCancel }: Props) {
   const removeBid = () => setSt(prev => ({ ...prev, bidding: prev.bidding.slice(0, -1) }));
 
   // ── save ───────────────────────────────────────────────────
-  const save = () => {
+  const save = async () => {
     setError('');
     if (!st.title.trim()) { setError('Wpisz tytuł rozdania.'); return; }
     const initialHands: Record<Seat, any> = {} as any;
@@ -390,7 +391,8 @@ export function DealBuilder({ initialData, isEdit, onSave, onCancel }: Props) {
     }));
     const bidding: string[][] = [];
     for (let i = 0; i < st.bidding.length; i += 4) bidding.push(st.bidding.slice(i, i + 4));
-    onSave({
+    setSaving(true);
+    const res = await onSave({
       id: (isEdit && initialData?.id) ? initialData.id : `deal-custom-${Date.now()}`,
       title: st.title.trim(),
       category: st.category,
@@ -405,6 +407,8 @@ export function DealBuilder({ initialData, isEdit, onSave, onCancel }: Props) {
       decisionPrompt: st.decisionPrompt.trim(),
       solution: { text: st.solutionText.trim(), revealAllCards },
     });
+    // On success the parent unmounts this builder; only handle the error path.
+    if (res?.error) { setError('Błąd zapisu: ' + res.error); setSaving(false); }
   };
 
   const totalCards = Object.values(st.hands).reduce((s, h) => s + h.length, 0);
@@ -825,8 +829,8 @@ export function DealBuilder({ initialData, isEdit, onSave, onCancel }: Props) {
       <div className="bg-slate-900 border-t border-slate-700 px-6 py-3 flex items-center gap-4 flex-shrink-0">
         {error && <span className="text-red-400 text-sm">{error}</span>}
         <div className="ml-auto flex gap-3">
-          <button onClick={onCancel} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm transition-colors">Anuluj</button>
-          <button onClick={save} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg text-sm transition-colors">Zapisz rozdanie</button>
+          <button onClick={onCancel} disabled={saving} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm transition-colors disabled:opacity-50">Anuluj</button>
+          <button onClick={save} disabled={saving} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-50">{saving ? 'Zapisywanie…' : 'Zapisz rozdanie'}</button>
         </div>
       </div>
     </div>

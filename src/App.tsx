@@ -53,12 +53,12 @@ function AppShell() {
   if (view === 'admin' && user.isAdmin) {
     return (
       <AdminPanel
-        baseDeals={dealsHook.baseDeals}
-        customDeals={dealsHook.customDeals}
-        hiddenIds={dealsHook.hiddenIds}
+        allDeals={dealsHook.allDeals}
+        loading={dealsHook.loading}
+        error={dealsHook.error}
         onAdd={dealsHook.addDeal}
         onUpdate={dealsHook.updateDeal}
-        onDelete={dealsHook.deleteDeal}
+        onArchive={dealsHook.archiveDeal}
         onRestore={dealsHook.restoreDeal}
         onBack={() => setView('trainer')}
       />
