@@ -49,6 +49,7 @@ function AppShell() {
   if (loading) return <LoadingScreen />;
   if (!user) return <LoginPage />;
   if (user.status !== 'approved') return <PendingScreen username={user.username} />;
+  if (srs.loading || history.loading || dealsHook.loading) return <LoadingScreen />;
 
   if (view === 'admin' && user.isAdmin) {
     return (

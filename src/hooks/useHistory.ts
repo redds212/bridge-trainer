@@ -1,22 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Attempt, AttemptPhase } from '../types';
+import type { AttemptRow } from '../lib/database.types';
+import { supabase } from '../lib/supabase';
 import { todayKey } from '../lib/date';
-
-const MAX_HISTORY = 500;
-
-function key(userId: string | null): string {
-  return `bridge-history-${userId ?? 'guest'}`;
-}
-
-function load(k: string): Attempt[] {
-  try {
-    const raw = localStorage.getItem(k);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
 
 export interface HistoryStats {
   totalAttempts: number;
@@ -27,6 +13,10 @@ export interface HistoryStats {
   solvedToday: number;
   /** active day keys, newest first */
   perDay: { day: string; count: number; correct: number }[];
+}
+
+function rowToAttempt(r: AttemptRow): Attempt {
+  return { dealId: r.deal_id, correct: r.correct, phase: r.phase, ts: r.ts };
 }
 
 function computeStats(attempts: Attempt[], now: Date = new Date()): HistoryStats {
@@ -63,26 +53,43 @@ function computeStats(attempts: Attempt[], now: Date = new Date()): HistoryStats
   return { totalAttempts, totalCorrect, activeDays, avgPerDay, streak, solvedToday, perDay };
 }
 
+/**
+ * Attempt history backed by the `attempts` table. Hydrated on login; new
+ * attempts append in memory and insert through to the database.
+ */
 export function useHistory(userId: string | null) {
-  const [attempts, setAttempts] = useState<Attempt[]>(() => load(key(userId)));
+  const [attempts, setAttempts] = useState<Attempt[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setAttempts(load(key(userId)));
+    if (!userId) { setAttempts([]); setLoading(false); return; }
+    let active = true;
+    setLoading(true);
+    supabase.from('attempts').select('*').eq('user_id', userId).order('ts', { ascending: true })
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) console.error('History load failed:', error.message);
+        else if (data) setAttempts(data.map(rowToAttempt));
+        setLoading(false);
+      });
+    return () => { active = false; };
   }, [userId]);
 
   const record = useCallback((dealId: string, correct: boolean, phase: AttemptPhase) => {
-    setAttempts(prev => {
-      const next = [...prev, { dealId, correct, phase, ts: new Date().toISOString() }];
-      const trimmed = next.length > MAX_HISTORY ? next.slice(next.length - MAX_HISTORY) : next;
-      localStorage.setItem(key(userId), JSON.stringify(trimmed));
-      return trimmed;
-    });
+    setAttempts(prev => [...prev, { dealId, correct, phase, ts: new Date().toISOString() }]);
+    if (userId) {
+      supabase.from('attempts').insert({ user_id: userId, deal_id: dealId, correct, phase })
+        .then(({ error }) => { if (error) console.error('History save failed:', error.message); });
+    }
   }, [userId]);
 
   const clear = useCallback(() => {
-    localStorage.removeItem(key(userId));
     setAttempts([]);
+    if (userId) {
+      supabase.from('attempts').delete().eq('user_id', userId)
+        .then(({ error }) => { if (error) console.error('History clear failed:', error.message); });
+    }
   }, [userId]);
 
-  return { attempts, record, clear, stats: computeStats(attempts) };
+  return { attempts, record, clear, stats: computeStats(attempts), loading };
 }
