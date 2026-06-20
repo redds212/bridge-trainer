@@ -3,7 +3,7 @@ export type Suit = 'S' | 'H' | 'D' | 'C';
 export type SRSStatus = 'NEW' | 'LEARNING' | 'REVIEW' | 'MASTERED';
 export type Difficulty = 'Easy' | 'Medium' | 'Hard' | 'Expert';
 export type GamePhase = 'intro' | 'decision' | 'revealed' | 'rated';
-export type UserRole = 'admin' | 'user';
+export type AccountStatus = 'pending' | 'approved';
 
 export interface HandCards {
   S: string;
@@ -78,10 +78,13 @@ export interface Attempt {
   phase: AttemptPhase;
 }
 
-export interface User {
-  id: string;
+// Authenticated user = Supabase auth identity + their profile row.
+export interface AppUser {
+  id: string;        // Supabase auth uid
+  email: string;
   username: string;
-  passwordHash: string;
-  role: UserRole;
-  createdAt: string;
+  isAdmin: boolean;
+  status: AccountStatus;
+  dailyTarget: number;
+  mode: LearningMode;
 }

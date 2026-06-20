@@ -50,12 +50,20 @@ npx supabase functions deploy delete-user
 ```
 
 ## 6. Zrób siebie adminem (po Etapie 1)
-Gdy aplikacja będzie już gadać z Supabase, zarejestruj swoje konto w apce (wpadnie jako `pending`), a potem w **SQL Editor**:
+1. W aplikacji **zarejestruj** swoje konto (e‑mail + nazwa + hasło).
+2. **Potwierdź e‑mail** klikając link z wiadomości. (Jeśli mail nie dotarł: Authentication → Users → Twój użytkownik → „Confirm email" w konsoli Supabase.)
+3. W **SQL Editor** uruchom (podstaw swój e‑mail) — działa nawet gdyby trigger nie założył profilu:
 ```sql
-update public.profiles
-   set is_admin = true, status = 'approved'
- where username = 'TWOJ_LOGIN';
+insert into public.profiles (id, username, is_admin, status)
+select id,
+       coalesce(nullif(raw_user_meta_data->>'username',''), split_part(email,'@',1)),
+       true, 'approved'
+from auth.users
+where email = 'TWOJ@EMAIL'
+on conflict (id) do update set is_admin = true, status = 'approved';
 ```
+4. W aplikacji na ekranie „Konto oczekuje na akceptację" kliknij **Sprawdź ponownie** (albo odśwież stronę) — wejdziesz z pełnym dostępem i przyciskiem panelu admina.
+
 Od tej pory akceptujesz i zarządzasz resztą kont z panelu admina.
 
 ---

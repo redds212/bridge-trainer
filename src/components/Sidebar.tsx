@@ -57,7 +57,7 @@ export function Sidebar({ deals, selectedId, getEntry, onSelect, onAdmin, onPane
         <div className="px-3 py-2 bg-slate-800/70 border-b border-slate-700 flex items-center justify-between gap-1">
           <div className="min-w-0">
             <div className="text-white text-xs font-medium truncate">{user.username}</div>
-            <div className="text-slate-500 text-[10px]">{user.role === 'admin' ? 'Administrator' : 'Użytkownik'}</div>
+            <div className="text-slate-500 text-[10px]">{user.isAdmin ? 'Administrator' : 'Użytkownik'}</div>
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
             {onPanel && (
@@ -68,7 +68,7 @@ export function Sidebar({ deals, selectedId, getEntry, onSelect, onAdmin, onPane
                 Mój panel
               </button>
             )}
-            {user.role === 'admin' && onAdmin && (
+            {user.isAdmin && onAdmin && (
               <button
                 onClick={onAdmin}
                 className="text-[10px] px-2 py-1 bg-blue-900/40 text-blue-400 rounded hover:bg-blue-900/70 border border-blue-800/50 transition-colors"

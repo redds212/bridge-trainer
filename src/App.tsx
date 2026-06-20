@@ -27,7 +27,7 @@ export default function App() {
 }
 
 function AppShell() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const [view, setView] = useState<View>('trainer');
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -46,9 +46,11 @@ function AppShell() {
     recordHistory: history.record,
   });
 
+  if (loading) return <LoadingScreen />;
   if (!user) return <LoginPage />;
+  if (user.status !== 'approved') return <PendingScreen username={user.username} />;
 
-  if (view === 'admin' && user.role === 'admin') {
+  if (view === 'admin' && user.isAdmin) {
     return (
       <AdminPanel
         baseDeals={dealsHook.baseDeals}
@@ -88,7 +90,7 @@ function AppShell() {
       srs={srs}
       recordHistory={history.record}
       session={session}
-      onAdmin={user.role === 'admin' ? () => setView('admin') : undefined}
+      onAdmin={user.isAdmin ? () => setView('admin') : undefined}
       onPanel={() => setView('panel')}
     />
   );
@@ -310,6 +312,54 @@ function RatedBanner({ entry, onNext }: { entry: SRSEntry; onNext: () => void })
       >
         Następne →
       </button>
+    </div>
+  );
+}
+
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-4">
+      <div className="text-5xl animate-pulse">🃏</div>
+      <div className="text-slate-400 text-sm">Ładowanie…</div>
+    </div>
+  );
+}
+
+function PendingScreen({ username }: { username: string }) {
+  const { logout, refreshProfile } = useAuth();
+  const [checking, setChecking] = useState(false);
+
+  const checkAgain = async () => {
+    setChecking(true);
+    await refreshProfile();
+    setChecking(false);
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+      <div className="bg-slate-800 border border-slate-700 rounded-2xl p-8 max-w-md w-full text-center shadow-2xl">
+        <div className="text-5xl mb-4">⏳</div>
+        <h2 className="text-white font-bold text-xl mb-2">Konto oczekuje na akceptację</h2>
+        <p className="text-slate-400 text-sm mb-6">
+          Cześć <span className="text-slate-200 font-medium">{username}</span>! Twoje konto zostało utworzone,
+          ale administrator musi je zatwierdzić, zanim uzyskasz dostęp do rozdań i systemu powtórek.
+        </p>
+        <div className="flex gap-2 justify-center">
+          <button
+            onClick={checkAgain}
+            disabled={checking}
+            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            {checking ? 'Sprawdzam…' : 'Sprawdź ponownie'}
+          </button>
+          <button
+            onClick={logout}
+            className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-sm font-medium border border-slate-600 transition-colors"
+          >
+            Wyloguj
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
