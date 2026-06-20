@@ -56,12 +56,21 @@ export function useDeals() {
     });
   };
 
+  const updateDeal = (id: string, updated: Deal) => {
+    setCustomDeals(prev => {
+      const next = prev.map(d => d.id === id ? { ...updated, id } : d);
+      localStorage.setItem(CUSTOM_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
   return {
     deals,
     baseDeals: dealsMock as Deal[],
     customDeals,
     hiddenIds,
     addDeal,
+    updateDeal,
     deleteDeal,
     restoreDeal,
   };

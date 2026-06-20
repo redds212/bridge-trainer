@@ -8,7 +8,6 @@ import { ContractBox } from './ContractBox';
 type Seat = import('../types').Seat;
 
 function buildPlayedBySeat(state: GameState): Partial<Record<Seat, string[]>> {
-  // Use Sets per seat: a card can appear in both state.tricks and state.visibleTrick simultaneously
   const sets: Partial<Record<Seat, Set<string>>> = {};
   const add = (seat: string, card: string) => {
     (sets[seat as Seat] ??= new Set()).add(card);
@@ -28,6 +27,28 @@ function buildPlayedBySeat(state: GameState): Partial<Record<Seat, string[]>> {
   return result;
 }
 
+function buildKnownVoids(state: GameState): Partial<Record<Seat, Set<string>>> {
+  const voids: Partial<Record<Seat, Set<string>>> = {};
+  const addVoid = (seat: Seat, suit: string) => {
+    (voids[seat] ??= new Set()).add(suit);
+  };
+  const checkTrick = (leader: Seat | null, cards: Partial<Record<Seat, string>>) => {
+    if (!leader) return;
+    const ledCard = cards[leader];
+    if (!ledCard) return;
+    const ledSuit = ledCard[0];
+    for (const [seat, card] of Object.entries(cards) as [Seat, string][]) {
+      if (seat === leader || !card) continue;
+      if (card[0] !== ledSuit) addVoid(seat, ledSuit);
+    }
+  };
+  for (const trick of state.tricks) {
+    checkTrick(trick.leader as Seat, trick.cards as Partial<Record<Seat, string>>);
+  }
+  checkTrick(state.currentTrickLeader, state.visibleTrick);
+  return voids;
+}
+
 interface Props {
   deal: Deal;
   state: GameState;
@@ -35,6 +56,7 @@ interface Props {
 
 export function BridgeTable({ deal, state }: Props) {
   const playedBySeat = buildPlayedBySeat(state);
+  const knownVoids = buildKnownVoids(state);
 
   return (
     <div className="relative h-full w-full bg-felt rounded-xl border border-felt-dark shadow-2xl overflow-hidden">
@@ -44,7 +66,7 @@ export function BridgeTable({ deal, state }: Props) {
       />
 
       {/* Bidding table — top right */}
-      <div className="absolute top-3 right-3 z-10 w-56">
+      <div className="absolute top-3 right-3 z-10 w-64">
         <BiddingTable bidding={deal.bidding} dealer={deal.dealer} />
       </div>
 
@@ -66,24 +88,25 @@ export function BridgeTable({ deal, state }: Props) {
         <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${
           deal.difficulty === 'Easy' ? 'bg-emerald-900/60 text-emerald-400 border-emerald-700' :
           deal.difficulty === 'Medium' ? 'bg-yellow-900/60 text-yellow-400 border-yellow-700' :
-          'bg-red-900/60 text-red-400 border-red-700'
+          deal.difficulty === 'Hard' ? 'bg-red-900/60 text-red-400 border-red-700' :
+          'bg-violet-900/60 text-violet-400 border-violet-700'
         }`}>
           {deal.difficulty}
         </span>
       </div>
 
       {/* Cross layout: N top, S bottom, W left, E right */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 p-3 pt-16">
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-2 pt-14">
 
         {/* North */}
-        <HandDisplay seat="N" hand={state.hands['N']} seatPlayed={playedBySeat['N']} />
+        <HandDisplay seat="N" hand={state.hands['N']} seatPlayed={playedBySeat['N']} knownVoids={knownVoids['N']} />
 
         <div className="flex items-center gap-2">
           {/* West */}
-          <HandDisplay seat="W" hand={state.hands['W']} seatPlayed={playedBySeat['W']} />
+          <HandDisplay seat="W" hand={state.hands['W']} seatPlayed={playedBySeat['W']} knownVoids={knownVoids['W']} />
 
           {/* Center: trick area */}
-          <div className="bg-felt-dark/60 rounded-xl border border-felt-dark w-28 h-28 flex items-center justify-center shadow-inner flex-shrink-0">
+          <div className="bg-felt-dark/60 rounded-xl border border-felt-dark w-32 h-32 flex items-center justify-center shadow-inner flex-shrink-0">
             <TrickDisplay
               visibleTrick={state.visibleTrick as Partial<Record<import('../types').Seat, string>>}
               leader={state.currentTrickLeader as import('../types').Seat | null}
@@ -91,11 +114,11 @@ export function BridgeTable({ deal, state }: Props) {
           </div>
 
           {/* East */}
-          <HandDisplay seat="E" hand={state.hands['E']} seatPlayed={playedBySeat['E']} />
+          <HandDisplay seat="E" hand={state.hands['E']} seatPlayed={playedBySeat['E']} knownVoids={knownVoids['E']} />
         </div>
 
         {/* South */}
-        <HandDisplay seat="S" hand={state.hands['S']} seatPlayed={playedBySeat['S']} />
+        <HandDisplay seat="S" hand={state.hands['S']} seatPlayed={playedBySeat['S']} knownVoids={knownVoids['S']} />
       </div>
     </div>
   );

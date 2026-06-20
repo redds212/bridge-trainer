@@ -1,7 +1,7 @@
 export type Seat = 'N' | 'S' | 'E' | 'W';
 export type Suit = 'S' | 'H' | 'D' | 'C';
 export type SRSStatus = 'NEW' | 'LEARNING' | 'REVIEW' | 'MASTERED';
-export type Difficulty = 'Easy' | 'Medium' | 'Hard';
+export type Difficulty = 'Easy' | 'Medium' | 'Hard' | 'Expert';
 export type GamePhase = 'intro' | 'decision' | 'revealed' | 'rated';
 export type UserRole = 'admin' | 'user';
 
@@ -46,12 +46,37 @@ export interface Deal {
 
 export interface SRSEntry {
   status: SRSStatus;
-  intervalStep: 0 | 1 | 2 | 3;
+  /** Number of consecutive correct first-try answers (0–4). 4 = mastered. */
+  consecutiveCorrect: 0 | 1 | 2 | 3 | 4;
+  /** Current interval in days (I). */
+  interval: number;
+  /** Next review day as local "YYYY-MM-DD" key, or null when mastered/new. */
   nextReviewDate: string | null;
+  /** ISO timestamp of last attempt. */
   lastSeen: string | null;
+  /** Marked when a deal was missed again inside the session buffer. */
+  flagDifficult?: boolean;
 }
 
 export type SRSStore = Record<string, SRSEntry>;
+
+export type LearningMode = 'maintenance' | 'balanced' | 'intensive';
+
+export interface UserSettings {
+  /** X — total deals per day. */
+  dailyTarget: number;
+  mode: LearningMode;
+}
+
+export type AttemptPhase = 'main' | 'buffer' | 'free';
+
+export interface Attempt {
+  dealId: string;
+  /** ISO timestamp. */
+  ts: string;
+  correct: boolean;
+  phase: AttemptPhase;
+}
 
 export interface User {
   id: string;

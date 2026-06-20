@@ -8,6 +8,7 @@ interface Props {
   getEntry: (id: string) => SRSEntry;
   onSelect: (id: string) => void;
   onAdmin?: () => void;
+  onPanel?: () => void;
 }
 
 const STATUS_DOT: Record<SRSStatus, string> = {
@@ -28,9 +29,10 @@ const DIFF_BADGE: Record<string, string> = {
   Easy: 'text-emerald-400',
   Medium: 'text-yellow-400',
   Hard: 'text-red-400',
+  Expert: 'text-violet-400',
 };
 
-export function Sidebar({ deals, selectedId, getEntry, onSelect, onAdmin }: Props) {
+export function Sidebar({ deals, selectedId, getEntry, onSelect, onAdmin, onPanel }: Props) {
   const { user, logout } = useAuth();
   const dueToday = deals.filter(d => {
     const e = getEntry(d.id);
@@ -58,12 +60,20 @@ export function Sidebar({ deals, selectedId, getEntry, onSelect, onAdmin }: Prop
             <div className="text-slate-500 text-[10px]">{user.role === 'admin' ? 'Administrator' : 'Użytkownik'}</div>
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
+            {onPanel && (
+              <button
+                onClick={onPanel}
+                className="text-[10px] px-2 py-1 bg-emerald-900/40 text-emerald-400 rounded hover:bg-emerald-900/70 border border-emerald-800/50 transition-colors"
+              >
+                Mój panel
+              </button>
+            )}
             {user.role === 'admin' && onAdmin && (
               <button
                 onClick={onAdmin}
                 className="text-[10px] px-2 py-1 bg-blue-900/40 text-blue-400 rounded hover:bg-blue-900/70 border border-blue-800/50 transition-colors"
               >
-                Panel
+                Admin
               </button>
             )}
             <button

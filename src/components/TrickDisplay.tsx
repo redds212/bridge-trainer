@@ -15,7 +15,7 @@ export function TrickDisplay({ visibleTrick, leader }: Props) {
   };
 
   return (
-    <div className="grid grid-cols-3 grid-rows-3 gap-0.5 w-24 h-24">
+    <div className="grid grid-cols-3 grid-rows-3 gap-0.5 w-28 h-28">
       {(['N', 'W', 'E', 'S'] as Seat[]).map(seat => {
         const card = visibleTrick[seat];
         return (

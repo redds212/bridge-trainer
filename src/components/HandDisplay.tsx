@@ -4,7 +4,8 @@ import { SUIT_ORDER, SUIT_SYMBOLS } from './SuitIcon';
 interface Props {
   seat: Seat;
   hand: HandData;
-  seatPlayed?: string[]; // card codes played by this seat, e.g. ["SA", "H10"]
+  seatPlayed?: string[];
+  knownVoids?: Set<string>; // suits (S/H/D/C) confirmed void by discarding off-suit
 }
 
 function isHidden(hand: HandData): hand is { hidden: true } {
@@ -41,7 +42,7 @@ function sortedHighToLow(ranks: string[]): string[] {
 
 const HIDDEN_COUNT = 4; // initial ? marks per suit for hidden hands
 
-export function HandDisplay({ seat, hand, seatPlayed = [] }: Props) {
+export function HandDisplay({ seat, hand, seatPlayed = [], knownVoids }: Props) {
   const playedSet = new Set(seatPlayed);
 
   if (isHidden(hand)) {
@@ -58,16 +59,16 @@ export function HandDisplay({ seat, hand, seatPlayed = [] }: Props) {
     return (
       <div className="flex flex-col items-center gap-1">
         <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider">{SEAT_SHORT[seat]}</div>
-        <div className="bg-slate-700/60 rounded-lg border border-slate-600 px-2 py-1.5 flex flex-col gap-0.5 min-w-[90px]">
+        <div className="bg-slate-700/60 rounded-lg border border-slate-600 px-3 py-2 flex flex-col gap-1 min-w-[105px]">
           {SUIT_ORDER.map(suit => {
             const played = sortedHighToLow(playedBySuit[suit] ?? []);
-            const remaining = Math.max(0, HIDDEN_COUNT - played.length);
+            const remaining = knownVoids?.has(suit) ? 0 : Math.max(0, HIDDEN_COUNT - played.length);
             return (
               <div key={suit} className="flex items-center gap-1 min-h-[1.4rem]">
                 <span className={`text-sm w-4 flex-shrink-0 ${SUIT_COLOR[suit]}`}>{SUIT_SYMBOLS[suit]}</span>
                 <div className="flex items-baseline gap-1 font-mono whitespace-nowrap">
                   {played.map((rank, i) => (
-                    <span key={i} className="text-sm text-slate-600">{rank}</span>
+                    <span key={i} className="text-sm text-slate-300">{rank}</span>
                   ))}
                   {Array.from({ length: remaining }, (_, i) => (
                     <span key={`q${i}`} className="text-sm text-slate-400">?</span>
@@ -86,7 +87,7 @@ export function HandDisplay({ seat, hand, seatPlayed = [] }: Props) {
   return (
     <div className="flex flex-col items-center gap-1">
       <div className="text-slate-300 text-xs font-semibold uppercase tracking-wider">{SEAT_SHORT[seat]}</div>
-      <div className="bg-slate-800/80 rounded-lg border border-slate-600 px-2 py-1.5 flex flex-col gap-0.5 min-w-[90px] fade-in">
+      <div className="bg-slate-800/80 rounded-lg border border-slate-600 px-3 py-2 flex flex-col gap-1 min-w-[105px] fade-in">
         {SUIT_ORDER.map(suit => {
           const rankStr = cards[suit] ?? '';
           const ranks = parseCards(rankStr);

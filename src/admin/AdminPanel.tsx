@@ -1,36 +1,92 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import type { Deal } from '../types';
+import { DealBuilder } from './DealBuilder';
+
+type BuilderMode =
+  | { type: 'new' }
+  | { type: 'edit'; deal: Deal }
+  | { type: 'clone'; deal: Deal };
 
 interface Props {
   baseDeals: Deal[];
   customDeals: Deal[];
   hiddenIds: string[];
   onAdd: (deal: Deal) => void;
+  onUpdate: (id: string, deal: Deal) => void;
   onDelete: (id: string) => void;
   onRestore: (id: string) => void;
   onBack: () => void;
 }
 
-export function AdminPanel({ baseDeals, customDeals, hiddenIds, onAdd, onDelete, onRestore, onBack }: Props) {
-  const [jsonInput, setJsonInput] = useState('');
-  const [jsonError, setJsonError] = useState('');
-  const [added, setAdded] = useState(false);
+const DIFF_COLOR: Record<string, string> = {
+  Easy: 'text-emerald-400',
+  Medium: 'text-yellow-400',
+  Hard: 'text-red-400',
+  Expert: 'text-violet-400',
+};
 
-  const handleAdd = () => {
-    try {
-      const deal = JSON.parse(jsonInput) as Deal;
-      if (!deal.id || !deal.title) throw new Error('Brak wymaganych pól: id, title');
-      onAdd(deal);
-      setJsonInput('');
-      setJsonError('');
-      setAdded(true);
-      setTimeout(() => setAdded(false), 2000);
-    } catch (e) {
-      setJsonError(e instanceof Error ? e.message : 'Błąd parsowania JSON');
-    }
-  };
+export function AdminPanel({ baseDeals, customDeals, hiddenIds, onAdd, onUpdate, onDelete, onRestore, onBack }: Props) {
+  const [builder, setBuilder] = useState<BuilderMode | null>(null);
+  const [flash, setFlash] = useState('');
+  const [flashErr, setFlashErr] = useState('');
+  const [showDeleted, setShowDeleted] = useState(false);
+  const importRef = useRef<HTMLInputElement>(null);
+
+  const showFlash = (msg: string) => { setFlash(msg); setTimeout(() => setFlash(''), 4000); };
+  const showErr = (msg: string) => { setFlashErr(msg); setTimeout(() => setFlashErr(''), 5000); };
 
   const isHidden = (id: string) => hiddenIds.includes(id);
+  const deletedCount = baseDeals.filter(d => isHidden(d.id)).length;
+
+  const exportDeals = () => {
+    const data = JSON.stringify(customDeals, null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `bridge-deals-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importDeals = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const parsed = JSON.parse(ev.target?.result as string);
+        const deals: Deal[] = Array.isArray(parsed) ? parsed : [parsed];
+        if (!deals.every(d => d.id && d.title)) throw new Error('nieprawidłowy format');
+        deals.forEach(d => onAdd({ ...d, id: `deal-custom-${Date.now()}-${Math.random().toString(36).slice(2)}` }));
+        showFlash(`Zaimportowano ${deals.length} rozdań.`);
+      } catch (err) {
+        showErr(`Błąd importu: ${err instanceof Error ? err.message : 'nieprawidłowy plik'}`);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  if (builder) {
+    const isEdit = builder.type === 'edit';
+    const initialData = builder.type !== 'new' ? builder.deal : undefined;
+    const cloneTitle = builder.type === 'clone' ? `Kopia: ${builder.deal.title}` : undefined;
+    return (
+      <DealBuilder
+        initialData={cloneTitle ? { ...initialData!, title: cloneTitle } : initialData}
+        isEdit={isEdit}
+        onSave={(deal) => {
+          if (isEdit) { onUpdate(deal.id, deal); showFlash('Rozdanie zaktualizowane.'); }
+          else { onAdd(deal); showFlash('Rozdanie dodane.'); }
+          setBuilder(null);
+        }}
+        onCancel={() => setBuilder(null)}
+      />
+    );
+  }
+
+  const visibleBaseDeals = showDeleted ? baseDeals : baseDeals.filter(d => !isHidden(d.id));
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col">
@@ -47,11 +103,35 @@ export function AdminPanel({ baseDeals, customDeals, hiddenIds, onAdd, onDelete,
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 max-w-5xl mx-auto w-full space-y-8">
+        {/* Flashes */}
+        {flash && (
+          <div className="bg-emerald-900/40 border border-emerald-700 rounded-lg px-4 py-2 text-emerald-300 text-sm">
+            ✓ {flash}
+          </div>
+        )}
+        {flashErr && (
+          <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-2 text-red-300 text-sm">
+            ✗ {flashErr}
+          </div>
+        )}
+
         {/* Deal list */}
         <div>
-          <h2 className="text-slate-300 font-semibold mb-3 text-xs uppercase tracking-wider">
-            Rozdania ({baseDeals.length + customDeals.length} łącznie, {hiddenIds.length} ukrytych)
-          </h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-slate-300 font-semibold text-xs uppercase tracking-wider">
+              Rozdania ({visibleBaseDeals.length + customDeals.length} widocznych
+              {deletedCount > 0 ? `, ${deletedCount} usuniętych` : ''})
+            </h2>
+            {deletedCount > 0 && (
+              <button
+                onClick={() => setShowDeleted(v => !v)}
+                className="text-xs text-slate-500 hover:text-slate-300 underline transition-colors"
+              >
+                {showDeleted ? 'Ukryj usunięte' : `Pokaż usunięte (${deletedCount})`}
+              </button>
+            )}
+          </div>
+
           <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
             <table className="w-full text-sm">
               <thead>
@@ -60,11 +140,11 @@ export function AdminPanel({ baseDeals, customDeals, hiddenIds, onAdd, onDelete,
                   <th className="text-left px-4 py-2 text-slate-400 font-medium text-xs">Kategoria</th>
                   <th className="text-left px-4 py-2 text-slate-400 font-medium text-xs">Trudność</th>
                   <th className="text-left px-4 py-2 text-slate-400 font-medium text-xs">Źródło</th>
-                  <th className="px-4 py-2 w-24"></th>
+                  <th className="px-4 py-2 w-36"></th>
                 </tr>
               </thead>
               <tbody>
-                {baseDeals.map(deal => (
+                {visibleBaseDeals.map(deal => (
                   <tr key={deal.id} className={`border-b border-slate-700/50 transition-opacity ${isHidden(deal.id) ? 'opacity-40' : ''}`}>
                     <td className="px-4 py-2.5">
                       <div className="text-white text-sm">{deal.title}</div>
@@ -72,28 +152,35 @@ export function AdminPanel({ baseDeals, customDeals, hiddenIds, onAdd, onDelete,
                     </td>
                     <td className="px-4 py-2.5 text-slate-400 text-xs">{deal.category}</td>
                     <td className="px-4 py-2.5 text-xs">
-                      <span className={
-                        deal.difficulty === 'Easy' ? 'text-emerald-400' :
-                        deal.difficulty === 'Medium' ? 'text-yellow-400' : 'text-red-400'
-                      }>{deal.difficulty}</span>
+                      <span className={DIFF_COLOR[deal.difficulty] ?? 'text-slate-400'}>{deal.difficulty}</span>
                     </td>
                     <td className="px-4 py-2.5 text-xs text-slate-500">baza</td>
                     <td className="px-4 py-2.5 text-right">
-                      {isHidden(deal.id) ? (
-                        <button
-                          onClick={() => onRestore(deal.id)}
-                          className="text-xs px-2.5 py-1 bg-emerald-900/40 text-emerald-400 rounded hover:bg-emerald-900/70 transition-colors border border-emerald-800/50"
-                        >
-                          Przywróć
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => onDelete(deal.id)}
-                          className="text-xs px-2.5 py-1 bg-red-900/40 text-red-400 rounded hover:bg-red-900/70 transition-colors border border-red-800/50"
-                        >
-                          Ukryj
-                        </button>
-                      )}
+                      <div className="flex gap-1.5 justify-end">
+                        {isHidden(deal.id) ? (
+                          <button
+                            onClick={() => onRestore(deal.id)}
+                            className="text-xs px-2.5 py-1 bg-emerald-900/40 text-emerald-400 rounded hover:bg-emerald-900/70 transition-colors border border-emerald-800/50"
+                          >
+                            Przywróć
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => setBuilder({ type: 'clone', deal })}
+                              className="text-xs px-2.5 py-1 bg-slate-700 text-slate-300 rounded hover:bg-slate-600 transition-colors border border-slate-600"
+                            >
+                              Klonuj
+                            </button>
+                            <button
+                              onClick={() => onDelete(deal.id)}
+                              className="text-xs px-2.5 py-1 bg-red-900/40 text-red-400 rounded hover:bg-red-900/70 transition-colors border border-red-800/50"
+                            >
+                              Usuń
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -105,19 +192,24 @@ export function AdminPanel({ baseDeals, customDeals, hiddenIds, onAdd, onDelete,
                     </td>
                     <td className="px-4 py-2.5 text-slate-400 text-xs">{deal.category}</td>
                     <td className="px-4 py-2.5 text-xs">
-                      <span className={
-                        deal.difficulty === 'Easy' ? 'text-emerald-400' :
-                        deal.difficulty === 'Medium' ? 'text-yellow-400' : 'text-red-400'
-                      }>{deal.difficulty}</span>
+                      <span className={DIFF_COLOR[deal.difficulty] ?? 'text-slate-400'}>{deal.difficulty}</span>
                     </td>
                     <td className="px-4 py-2.5 text-xs text-blue-400">własne</td>
                     <td className="px-4 py-2.5 text-right">
-                      <button
-                        onClick={() => onDelete(deal.id)}
-                        className="text-xs px-2.5 py-1 bg-red-900/40 text-red-400 rounded hover:bg-red-900/70 transition-colors border border-red-800/50"
-                      >
-                        Usuń
-                      </button>
+                      <div className="flex gap-1.5 justify-end">
+                        <button
+                          onClick={() => setBuilder({ type: 'edit', deal })}
+                          className="text-xs px-2.5 py-1 bg-blue-900/40 text-blue-400 rounded hover:bg-blue-900/70 transition-colors border border-blue-800/50"
+                        >
+                          Edytuj
+                        </button>
+                        <button
+                          onClick={() => onDelete(deal.id)}
+                          className="text-xs px-2.5 py-1 bg-red-900/40 text-red-400 rounded hover:bg-red-900/70 transition-colors border border-red-800/50"
+                        >
+                          Usuń
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -126,35 +218,41 @@ export function AdminPanel({ baseDeals, customDeals, hiddenIds, onAdd, onDelete,
           </div>
         </div>
 
-        {/* Add deal via JSON */}
-        <div>
-          <h2 className="text-slate-300 font-semibold mb-3 text-xs uppercase tracking-wider">Dodaj nowe rozdanie (JSON)</h2>
-          <div className="bg-slate-800 rounded-xl border border-slate-700 p-4 space-y-3">
-            <textarea
-              value={jsonInput}
-              onChange={e => { setJsonInput(e.target.value); setJsonError(''); setAdded(false); }}
-              rows={14}
-              placeholder={`{\n  "id": "deal-custom-001",\n  "title": "Tytuł rozdania",\n  "category": "Rozgrywający",\n  "difficulty": "Medium",\n  "contract": "3NT",\n  "declarer": "S",\n  "dealer": "W",\n  "vulnerability": "None",\n  "bidding": [["1NT","P","3NT","P"],["P","P"]],\n  "initialHands": { ... },\n  "introSequence": [ ... ],\n  "decisionPrompt": "...",\n  "solution": { "text": "...", "revealAllCards": {} }\n}`}
-              className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-xs font-mono placeholder:text-slate-600 focus:outline-none focus:border-blue-500 transition-colors resize-y"
-            />
-            {jsonError && (
-              <div className="bg-red-900/40 border border-red-700 rounded-lg px-3 py-2 text-red-300 text-xs">
-                Błąd: {jsonError}
-              </div>
-            )}
-            {added && (
-              <div className="bg-emerald-900/40 border border-emerald-700 rounded-lg px-3 py-2 text-emerald-300 text-xs">
-                Rozdanie zostało dodane.
-              </div>
-            )}
+        {/* Add deal + Export/Import */}
+        <div className="space-y-4">
+          <h2 className="text-slate-300 font-semibold text-xs uppercase tracking-wider">Zarządzanie własnymi rozdaniami</h2>
+
+          <div className="flex flex-wrap gap-3 items-center">
             <button
-              onClick={handleAdd}
-              disabled={!jsonInput.trim()}
-              className="px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-semibold rounded-lg text-sm transition-colors"
+              onClick={() => setBuilder({ type: 'new' })}
+              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl text-sm transition-colors shadow"
             >
-              Dodaj rozdanie
+              + Nowe rozdanie
             </button>
+
+            <div className="h-6 border-l border-slate-700" />
+
+            <button
+              onClick={exportDeals}
+              disabled={customDeals.length === 0}
+              className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium rounded-xl text-sm transition-colors border border-slate-600 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Eksportuj JSON ({customDeals.length})
+            </button>
+
+            <button
+              onClick={() => importRef.current?.click()}
+              className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium rounded-xl text-sm transition-colors border border-slate-600"
+            >
+              Importuj JSON
+            </button>
+            <input ref={importRef} type="file" accept=".json" className="hidden" onChange={importDeals} />
           </div>
+
+          <p className="text-slate-500 text-xs">
+            Własne rozdania zapisują się w localStorage przeglądarki — przeżywają reload i deploy na tym samym adresie URL.
+            Użyj Eksport/Import jako backup przed zmianą domeny lub wyczyszczeniem danych przeglądarki.
+          </p>
         </div>
       </div>
     </div>

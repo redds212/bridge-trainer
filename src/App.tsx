@@ -1,16 +1,22 @@
 import { useState, useEffect } from 'react';
-import type { SRSEntry } from './types';
+import type { SRSEntry, Deal } from './types';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { LoginPage } from './auth/LoginPage';
 import { AdminPanel } from './admin/AdminPanel';
+import { UserPanel } from './components/UserPanel';
 import { useSRS, isReviewDue } from './hooks/useSRS';
 import { useDeals } from './hooks/useDeals';
 import { useGameState } from './hooks/useGameState';
+import { useHistory } from './hooks/useHistory';
+import { useSettings } from './hooks/useSettings';
+import { useDailySession } from './hooks/useDailySession';
 import { Sidebar } from './components/Sidebar';
 import { BridgeTable } from './components/BridgeTable';
 import { ControlPanel } from './components/ControlPanel';
 import { DecisionPanel } from './components/DecisionPanel';
-import type { Deal } from './types';
+import { SessionBar } from './components/SessionBar';
+
+type View = 'trainer' | 'admin' | 'panel';
 
 export default function App() {
   return (
@@ -22,8 +28,23 @@ export default function App() {
 
 function AppShell() {
   const { user } = useAuth();
-  const [view, setView] = useState<'trainer' | 'admin'>('trainer');
+  const [view, setView] = useState<View>('trainer');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
   const dealsHook = useDeals();
+  const userId = user?.id ?? null;
+  const srs = useSRS(userId);
+  const history = useHistory(userId);
+  const { settings, update: updateSettings } = useSettings(userId);
+
+  const session = useDailySession({
+    deals: dealsHook.deals,
+    store: srs.store,
+    settings,
+    applyResult: srs.applyResult,
+    finalizeBufferResult: srs.finalizeBufferResult,
+    recordHistory: history.record,
+  });
 
   if (!user) return <LoginPage />;
 
@@ -34,8 +55,26 @@ function AppShell() {
         customDeals={dealsHook.customDeals}
         hiddenIds={dealsHook.hiddenIds}
         onAdd={dealsHook.addDeal}
+        onUpdate={dealsHook.updateDeal}
         onDelete={dealsHook.deleteDeal}
         onRestore={dealsHook.restoreDeal}
+        onBack={() => setView('trainer')}
+      />
+    );
+  }
+
+  if (view === 'panel') {
+    return (
+      <UserPanel
+        deals={dealsHook.deals}
+        store={srs.store}
+        settings={settings}
+        updateSettings={updateSettings}
+        attempts={history.attempts}
+        stats={history.stats}
+        onReplay={(id) => { session.cancel(); setSelectedId(id); setView('trainer'); }}
+        onStartSession={() => { session.start(); setView('trainer'); }}
+        onClearHistory={history.clear}
         onBack={() => setView('trainer')}
       />
     );
@@ -44,35 +83,65 @@ function AppShell() {
   return (
     <TrainerApp
       deals={dealsHook.deals}
-      userId={user.id}
+      selectedId={selectedId}
+      onSelectId={setSelectedId}
+      srs={srs}
+      recordHistory={history.record}
+      session={session}
       onAdmin={user.role === 'admin' ? () => setView('admin') : undefined}
+      onPanel={() => setView('panel')}
     />
   );
 }
 
-function TrainerApp({ deals, userId, onAdmin }: { deals: Deal[]; userId: string; onAdmin?: () => void }) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const { getEntry, applyResult } = useSRS(userId);
+type SessionApi = ReturnType<typeof useDailySession>;
+type SRSApi = ReturnType<typeof useSRS>;
+
+interface TrainerProps {
+  deals: Deal[];
+  selectedId: string | null;
+  onSelectId: (id: string | null) => void;
+  srs: SRSApi;
+  recordHistory: (id: string, correct: boolean, phase: 'main' | 'buffer' | 'free') => void;
+  session: SessionApi;
+  onAdmin?: () => void;
+  onPanel: () => void;
+}
+
+function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session, onAdmin, onPanel }: TrainerProps) {
+  const { getEntry, applyResult } = srs;
 
   const selectedDeal = deals.find(d => d.id === selectedId) ?? null;
   const { state, next, prev, rewind, revealSolution, setPhase, reset } = useGameState(selectedDeal);
 
   useEffect(() => {
     if (selectedDeal) reset(selectedDeal);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDeal?.id]);
 
-  const handleSelect = (id: string) => setSelectedId(id);
+  // Guided session drives selection: each answer bumps sessionToken → load next deal fresh.
+  useEffect(() => {
+    if (!session.active || !session.currentDealId) return;
+    onSelectId(session.currentDealId);
+    const d = deals.find(x => x.id === session.currentDealId);
+    if (d) reset(d);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.sessionToken]);
 
-  const handleCorrect = () => {
-    if (!selectedId) return;
-    applyResult(selectedId, true);
-    setPhase('rated');
+  const handleSelect = (id: string) => {
+    if (session.active) session.cancel();
+    onSelectId(id);
   };
 
-  const handleWrong = () => {
+  const handleRate = (correct: boolean) => {
     if (!selectedId) return;
-    applyResult(selectedId, false);
-    setPhase('rated');
+    if (session.active) {
+      session.answer(correct); // records history + SRS (main or buffer pass)
+    } else {
+      applyResult(selectedId, correct);
+      recordHistory(selectedId, correct, 'free');
+      setPhase('rated');
+    }
   };
 
   const handleNextDeal = () => {
@@ -89,18 +158,35 @@ function TrainerApp({ deals, userId, onAdmin }: { deals: Deal[]; userId: string;
         getEntry={getEntry}
         onSelect={handleSelect}
         onAdmin={onAdmin}
+        onPanel={onPanel}
       />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {session.active && session.progress && (
+          <SessionBar progress={session.progress} onCancel={session.cancel} />
+        )}
+
+        {session.completed && (
+          <SessionComplete
+            total={session.completed.slots.length}
+            onClose={session.dismissCompleted}
+          />
+        )}
+
         {!selectedDeal || !state ? (
-          <WelcomeScreen deals={deals} onSelect={handleSelect} getEntry={getEntry} />
+          <WelcomeScreen
+            deals={deals}
+            onSelect={handleSelect}
+            getEntry={getEntry}
+            onStartSession={() => session.start()}
+          />
         ) : (
           <>
             <div className="flex-1 p-3 min-h-0 flex flex-col">
               <BridgeTable deal={selectedDeal} state={state} />
             </div>
 
-            {state.phase === 'rated' && selectedId && (
+            {!session.active && state.phase === 'rated' && selectedId && (
               <RatedBanner entry={getEntry(selectedId)} onNext={handleNextDeal} />
             )}
 
@@ -119,8 +205,8 @@ function TrainerApp({ deals, userId, onAdmin }: { deals: Deal[]; userId: string;
               prompt={selectedDeal.decisionPrompt}
               solutionText={selectedDeal.solution.text}
               onReveal={revealSolution}
-              onCorrect={handleCorrect}
-              onWrong={handleWrong}
+              onCorrect={() => handleRate(true)}
+              onWrong={() => handleRate(false)}
             />
           </>
         )}
@@ -129,7 +215,36 @@ function TrainerApp({ deals, userId, onAdmin }: { deals: Deal[]; userId: string;
   );
 }
 
-function WelcomeScreen({ deals, onSelect, getEntry }: { deals: Deal[]; onSelect: (id: string) => void; getEntry: (id: string) => SRSEntry }) {
+function SessionComplete({ total, onClose }: { total: number; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-slate-800 border border-slate-600 rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl slide-up">
+        <div className="text-5xl mb-3">🎉</div>
+        <h2 className="text-white font-bold text-xl mb-2">Sesja ukończona!</h2>
+        <p className="text-slate-400 text-sm mb-6">
+          {total > 0
+            ? `Przerobiłeś dzisiejszą pulę ${total} rozdań. Błędne wrócą jutro.`
+            : 'Brak rozdań na dziś — wszystko powtórzone!'}
+        </p>
+        <button
+          onClick={onClose}
+          className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg text-sm transition-colors"
+        >
+          Zamknij
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function WelcomeScreen({
+  deals, onSelect, getEntry, onStartSession,
+}: {
+  deals: Deal[];
+  onSelect: (id: string) => void;
+  getEntry: (id: string) => SRSEntry;
+  onStartSession: () => void;
+}) {
   const due = deals.filter(d => isReviewDue(getEntry(d.id)));
 
   return (
@@ -138,10 +253,17 @@ function WelcomeScreen({ deals, onSelect, getEntry }: { deals: Deal[]; onSelect:
         <div className="text-6xl mb-4">🃏</div>
         <h2 className="text-2xl font-bold text-white mb-2">Trenażer Brydżowy SRS</h2>
         <p className="text-slate-400 text-sm max-w-md">
-          Wybierz rozdanie z listy po lewej, aby rozpocząć naukę.
-          System SRS pomoże Ci zapamiętać kluczowe pozycje przez zaplanowane powtórki.
+          Rozpocznij dzisiejszą sesję, aby system dobrał rozdania według algorytmu powtórek,
+          albo wybierz rozdanie z listy po lewej.
         </p>
       </div>
+
+      <button
+        onClick={onStartSession}
+        className="px-7 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl text-sm transition-colors shadow-lg shadow-blue-900/40"
+      >
+        ▶ Rozpocznij dzisiejszą sesję
+      </button>
 
       {due.length > 0 && (
         <div className="bg-yellow-900/20 border border-yellow-800/40 rounded-xl p-4 max-w-sm w-full">
@@ -159,20 +281,6 @@ function WelcomeScreen({ deals, onSelect, getEntry }: { deals: Deal[]; onSelect:
           ))}
         </div>
       )}
-
-      <div className="grid grid-cols-3 gap-4 max-w-lg w-full">
-        {deals.slice(0, 3).map(d => (
-          <button
-            key={d.id}
-            onClick={() => onSelect(d.id)}
-            className="bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg p-3 text-center transition-colors group"
-          >
-            <div className="text-3xl mb-1 group-hover:scale-110 transition-transform">🂠</div>
-            <div className="text-white text-xs font-medium leading-snug">{d.title}</div>
-            <div className="text-slate-500 text-[10px] mt-1">{d.difficulty}</div>
-          </button>
-        ))}
-      </div>
     </div>
   );
 }

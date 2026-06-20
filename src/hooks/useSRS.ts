@@ -1,5 +1,9 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { SRSStore, SRSEntry } from '../types';
+import { getDefaultEntry, normalizeEntry, applyAnswer, finalizeBuffer, isReviewDue } from '../lib/srs';
+
+// Re-export so existing imports (`from '../hooks/useSRS'`) keep working.
+export { getDefaultEntry, isReviewDue };
 
 function storageKey(userId: string | null): string {
   return userId ? `bridge-srs-${userId}` : 'bridge-srs-guest';
@@ -16,22 +20,6 @@ function saveStore(key: string, store: SRSStore) {
   localStorage.setItem(key, JSON.stringify(store));
 }
 
-function addDays(date: Date, days: number): Date {
-  const d = new Date(date);
-  d.setDate(d.getDate() + days);
-  return d;
-}
-
-export function getDefaultEntry(): SRSEntry {
-  return { status: 'NEW', intervalStep: 0, nextReviewDate: null, lastSeen: null };
-}
-
-export function isReviewDue(entry: SRSEntry): boolean {
-  if (entry.status === 'MASTERED') return false;
-  if (!entry.nextReviewDate) return entry.status === 'NEW';
-  return new Date(entry.nextReviewDate) <= new Date();
-}
-
 export function useSRS(userId: string | null) {
   const [store, setStore] = useState<SRSStore>(() => loadStore(storageKey(userId)));
 
@@ -40,44 +28,42 @@ export function useSRS(userId: string | null) {
   }, [userId]);
 
   const getEntry = useCallback(
-    (id: string): SRSEntry => store[id] ?? getDefaultEntry(),
+    (id: string): SRSEntry => normalizeEntry(store[id]),
     [store]
   );
 
-  const applyResult = useCallback((id: string, correct: boolean) => {
+  const commit = useCallback((id: string, next: SRSEntry) => {
     const key = storageKey(userId);
     setStore(prev => {
-      const current = prev[id] ?? getDefaultEntry();
-      const now = new Date();
-      let next: SRSEntry;
-
-      if (!correct) {
-        next = { status: 'LEARNING', intervalStep: 1, nextReviewDate: addDays(now, 3).toISOString(), lastSeen: now.toISOString() };
-      } else {
-        const step = current.intervalStep;
-        if (step === 0 || step === 1) {
-          next = { status: 'REVIEW', intervalStep: 2, nextReviewDate: addDays(now, 7).toISOString(), lastSeen: now.toISOString() };
-        } else if (step === 2) {
-          next = { status: 'REVIEW', intervalStep: 3, nextReviewDate: addDays(now, 21).toISOString(), lastSeen: now.toISOString() };
-        } else {
-          next = { status: 'MASTERED', intervalStep: 3, nextReviewDate: null, lastSeen: now.toISOString() };
-        }
-      }
-
       const updated = { ...prev, [id]: next };
       saveStore(key, updated);
       return updated;
     });
   }, [userId]);
 
-  const resetEntry = useCallback((id: string) => {
-    const key = storageKey(userId);
+  /** First-try answer in the main session (or free play). */
+  const applyResult = useCallback((id: string, correct: boolean) => {
     setStore(prev => {
-      const updated = { ...prev, [id]: getDefaultEntry() };
-      saveStore(key, updated);
+      const next = applyAnswer(normalizeEntry(prev[id]), correct);
+      const updated = { ...prev, [id]: next };
+      saveStore(storageKey(userId), updated);
       return updated;
     });
   }, [userId]);
 
-  return { getEntry, applyResult, resetEntry, store };
+  /** Finalize after a session-buffer retry (always returns tomorrow). */
+  const finalizeBufferResult = useCallback((id: string, retrySucceeded: boolean) => {
+    setStore(prev => {
+      const next = finalizeBuffer(normalizeEntry(prev[id]), retrySucceeded);
+      const updated = { ...prev, [id]: next };
+      saveStore(storageKey(userId), updated);
+      return updated;
+    });
+  }, [userId]);
+
+  const resetEntry = useCallback((id: string) => {
+    commit(id, getDefaultEntry());
+  }, [commit]);
+
+  return { getEntry, applyResult, finalizeBufferResult, resetEntry, store };
 }

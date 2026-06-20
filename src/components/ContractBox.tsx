@@ -9,22 +9,33 @@ interface Props {
 
 const DECLARER_NAMES: Record<Seat, string> = { N: 'Północ', S: 'Południe', E: 'Wschód', W: 'Zachód' };
 
-function formatContract(contract: string): string {
-  return contract
-    .replace('NT', 'SA')
-    .replace('S', '♠').replace('H', '♥').replace('D', '♦').replace('C', '♣')
-    .replace('SA', 'SA'); // restore SA after suit replacements
+const SUIT_SYM: Record<string, string> = { S: '♠', H: '♥', D: '♦', C: '♣' };
+const SUIT_COL: Record<string, string> = {
+  S: 'text-blue-300',
+  H: 'text-red-400',
+  D: 'text-orange-400',
+  C: 'text-emerald-400',
+};
+
+function ContractDisplay({ contract }: { contract: string }) {
+  const match = contract.match(/^(\d)(S|H|D|C|NT)$/);
+  if (!match) return <span className="text-white">{contract}</span>;
+  const [, level, suit] = match;
+  if (suit === 'NT') return <span className="text-white">{level}BA</span>;
+  return (
+    <span>
+      <span className="text-white">{level}</span>
+      <span className={SUIT_COL[suit]}>{SUIT_SYM[suit]}</span>
+    </span>
+  );
 }
 
 export function ContractBox({ contract, declarer, trickScores, vulnerability }: Props) {
-  const contractStr = contract.replace('NT', 'SA');
-  const hasRed = contractStr.includes('♥') || contractStr.includes('♦');
-
   return (
     <div className="bg-sky-900/90 border border-sky-600 rounded-lg px-3 py-2 text-center min-w-[110px]">
       <div className="text-sky-300 text-[10px] font-semibold uppercase tracking-wider mb-1">Kontrakt</div>
-      <div className={`text-lg font-bold ${hasRed ? 'text-red-400' : 'text-white'}`}>
-        {contractStr} {declarer}
+      <div className="text-lg font-bold">
+        <ContractDisplay contract={contract} /> {declarer}
       </div>
       <div className="text-sky-400 text-[10px] mt-1">{DECLARER_NAMES[declarer]}</div>
       <div className="border-t border-sky-700 mt-2 pt-1 grid grid-cols-2 gap-1 text-[10px]">
