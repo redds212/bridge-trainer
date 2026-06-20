@@ -79,6 +79,7 @@ function AppShell() {
         onReplay={(id) => { session.cancel(); setSelectedId(id); setView('trainer'); }}
         onStartSession={() => { session.start(); setView('trainer'); }}
         onClearHistory={history.clear}
+        onResetProgress={async () => { await srs.clearAll(); history.clear(); }}
         onBack={() => setView('trainer')}
       />
     );

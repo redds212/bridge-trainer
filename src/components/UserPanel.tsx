@@ -16,6 +16,7 @@ interface Props {
   onReplay: (dealId: string) => void;
   onStartSession: () => void;
   onClearHistory: () => void;
+  onResetProgress: () => void | Promise<void>;
   onBack: () => void;
 }
 
@@ -23,10 +24,19 @@ const MODES: LearningMode[] = ['maintenance', 'balanced', 'intensive'];
 
 export function UserPanel({
   deals, store, settings, updateSettings, attempts, stats,
-  onReplay, onStartSession, onClearHistory, onBack,
+  onReplay, onStartSession, onClearHistory, onResetProgress, onBack,
 }: Props) {
   const [showRepeats, setShowRepeats] = useState(true);
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  const doReset = async () => {
+    setResetting(true);
+    await onResetProgress();
+    setResetting(false);
+    setShowResetConfirm(false);
+  };
 
   const titleOf = useMemo(() => {
     const m = new Map(deals.map(d => [d.id, d.title]));
@@ -306,7 +316,51 @@ export function UserPanel({
             </div>
           )}
         </section>
+
+        {/* Reset zone */}
+        <section className="bg-slate-800 rounded-xl border border-red-900/40 p-5">
+          <h2 className="text-red-400 font-semibold text-sm mb-1">Strefa resetu</h2>
+          <p className="text-slate-500 text-xs mb-4">
+            Wyzeruj wszystkie swoje postępy — harmonogram powtórek wróci do stanu „Nowe",
+            a historia rozwiązań i streak zostaną usunięte. Rozdania pozostają nietknięte.
+          </p>
+          <button
+            onClick={() => setShowResetConfirm(true)}
+            className="px-5 py-2.5 bg-red-900/40 hover:bg-red-900/70 text-red-300 font-medium rounded-lg text-sm transition-colors border border-red-800/50"
+          >
+            Usuń postępy
+          </button>
+        </section>
       </div>
+
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-slate-800 border border-slate-600 rounded-2xl p-7 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-4xl mb-3">⚠️</div>
+            <h3 className="text-white font-bold text-lg mb-2">Usunąć wszystkie postępy?</h3>
+            <p className="text-slate-400 text-sm mb-6">
+              Wszystkie rozdania wrócą do statusu „Nowe", a historia rozwiązań i streak zostaną
+              wyczyszczone. Tej operacji nie można cofnąć.
+            </p>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={doReset}
+                disabled={resetting}
+                className="px-5 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-semibold rounded-lg text-sm transition-colors"
+              >
+                {resetting ? 'Usuwanie…' : 'Tak, usuń postępy'}
+              </button>
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                disabled={resetting}
+                className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-sm font-medium border border-slate-600 transition-colors disabled:opacity-50"
+              >
+                Anuluj
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

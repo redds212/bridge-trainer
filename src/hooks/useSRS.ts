@@ -95,5 +95,14 @@ export function useSRS(userId: string | null) {
     }
   }, [userId]);
 
-  return { getEntry, applyResult, finalizeBufferResult, resetEntry, store, loading };
+  // Wipe all of the user's SRS progress (every deal back to NEW).
+  const clearAll = useCallback(async () => {
+    storeRef.current = {};
+    setStore({});
+    if (!userId) return;
+    const { error } = await supabase.from('srs_progress').delete().eq('user_id', userId);
+    if (error) console.error('SRS clear-all failed:', error.message);
+  }, [userId]);
+
+  return { getEntry, applyResult, finalizeBufferResult, resetEntry, clearAll, store, loading };
 }
