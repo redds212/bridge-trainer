@@ -767,7 +767,8 @@ export function DealBuilder({ initialData, isEdit, onSave, onCancel }: Props) {
                             )}
                             <div className="space-y-1">
                               {SUITS.map(suit => {
-                                const sc = valid.filter(c => c[0] === suit);
+                                const sc = valid.filter(c => c[0] === suit)
+                                  .sort((a, b) => RANKS.indexOf(a.slice(1)) - RANKS.indexOf(b.slice(1)));
                                 if (!sc.length) return null;
                                 return (
                                   <div key={suit} className="flex items-center gap-1">
