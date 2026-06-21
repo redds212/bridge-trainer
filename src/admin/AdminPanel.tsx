@@ -2,6 +2,9 @@ import { useState, useRef } from 'react';
 import type { Deal } from '../types';
 import type { DealRecord } from '../hooks/useDeals';
 import { DealBuilder } from './DealBuilder';
+import { UsersAdmin } from './UsersAdmin';
+
+type Tab = 'deals' | 'users';
 
 type BuilderMode =
   | { type: 'new' }
@@ -36,6 +39,7 @@ function toDeal(r: DealRecord): Deal {
 }
 
 export function AdminPanel({ allDeals, loading, error, onAdd, onUpdate, onArchive, onRestore, onDelete, onBack }: Props) {
+  const [tab, setTab] = useState<Tab>('deals');
   const [builder, setBuilder] = useState<BuilderMode | null>(null);
   const [flash, setFlash] = useState('');
   const [flashErr, setFlashErr] = useState('');
@@ -123,11 +127,25 @@ export function AdminPanel({ allDeals, loading, error, onAdd, onUpdate, onArchiv
           ← Powrót
         </button>
         <h1 className="text-white font-bold">Panel Administracyjny</h1>
-        <span className="text-slate-500 text-xs">Zarządzanie rozdaniami</span>
+        <div className="flex gap-1 ml-2">
+          {(['deals', 'users'] as Tab[]).map(t => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
+                tab === t ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {t === 'deals' ? 'Rozdania' : 'Użytkownicy'}
+            </button>
+          ))}
+        </div>
         {busy && <span className="text-blue-400 text-xs animate-pulse ml-auto">Zapisywanie…</span>}
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 max-w-5xl mx-auto w-full space-y-8">
+        {tab === 'users' && <UsersAdmin />}
+        {tab === 'deals' && (<>
         {flash && (
           <div className="bg-emerald-900/40 border border-emerald-700 rounded-lg px-4 py-2 text-emerald-300 text-sm">✓ {flash}</div>
         )}
@@ -295,6 +313,7 @@ export function AdminPanel({ allDeals, loading, error, onAdd, onUpdate, onArchiv
             Eksport JSON zapisuje Twoje własne rozdania jako backup; import wczytuje je z powrotem.
           </p>
         </div>
+        </>)}
       </div>
     </div>
   );
