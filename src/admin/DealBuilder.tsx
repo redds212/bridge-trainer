@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import type { Seat, Suit, Deal, HandCards, HandData, TrickStep } from '../types';
+import { validateDeal, type DealValidation } from '../lib/validateDeal';
 
 const SUITS: Suit[] = ['S', 'H', 'D', 'C'];
 const SUIT_SYM: Record<Suit, string> = { S: '♠', H: '♥', D: '♦', C: '♣' };
@@ -260,6 +261,8 @@ export function DealBuilder({ initialData, isEdit, onSave, onCancel }: Props) {
   const [trickSeat, setTrickSeat] = useState<Seat | null>(null);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [issues, setIssues] = useState<DealValidation | null>(null);
+  const [ack, setAck] = useState(false);
 
   const contract = `${st.contractLevel}${st.contractSuit}`;
   const contractSuitSym = st.contractSuit === 'NT' ? 'BA' : SUIT_SYM[st.contractSuit as Suit];
@@ -391,8 +394,8 @@ export function DealBuilder({ initialData, isEdit, onSave, onCancel }: Props) {
     }));
     const bidding: string[][] = [];
     for (let i = 0; i < st.bidding.length; i += 4) bidding.push(st.bidding.slice(i, i + 4));
-    setSaving(true);
-    const res = await onSave({
+
+    const dealObj: Deal = {
       id: (isEdit && initialData?.id) ? initialData.id : `deal-custom-${Date.now()}`,
       title: st.title.trim(),
       category: st.category,
@@ -406,7 +409,17 @@ export function DealBuilder({ initialData, isEdit, onSave, onCancel }: Props) {
       introSequence,
       decisionPrompt: st.decisionPrompt.trim(),
       solution: { text: st.solutionText.trim(), revealAllCards },
-    });
+    };
+
+    // Validate beyond the live input constraints. Errors block; warnings need
+    // one extra confirming click ("Zapisz mimo ostrzeżeń").
+    const v = validateDeal(dealObj);
+    if (v.errors.length) { setIssues(v); setAck(false); return; }
+    if (v.warnings.length && !ack) { setIssues(v); setAck(true); return; }
+    setIssues(null);
+
+    setSaving(true);
+    const res = await onSave(dealObj);
     // On success the parent unmounts this builder; only handle the error path.
     if (res?.error) { setError('Błąd zapisu: ' + res.error); setSaving(false); }
   };
@@ -826,11 +839,27 @@ export function DealBuilder({ initialData, isEdit, onSave, onCancel }: Props) {
         </div>
       </div>
 
+      {issues && (issues.errors.length > 0 || issues.warnings.length > 0) && (
+        <div className="bg-slate-900 border-t border-slate-700 px-6 py-2 max-h-32 overflow-y-auto space-y-1 flex-shrink-0">
+          {issues.errors.map((e, i) => (
+            <div key={`e${i}`} className="text-red-400 text-xs">✗ {e}</div>
+          ))}
+          {issues.warnings.map((w, i) => (
+            <div key={`w${i}`} className="text-amber-400 text-xs">⚠ {w}</div>
+          ))}
+          {issues.errors.length === 0 && issues.warnings.length > 0 && (
+            <div className="text-slate-400 text-[11px] pt-0.5">Możesz zapisać mimo ostrzeżeń lub poprawić rozdanie.</div>
+          )}
+        </div>
+      )}
+
       <div className="bg-slate-900 border-t border-slate-700 px-6 py-3 flex items-center gap-4 flex-shrink-0">
         {error && <span className="text-red-400 text-sm">{error}</span>}
         <div className="ml-auto flex gap-3">
           <button onClick={onCancel} disabled={saving} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm transition-colors disabled:opacity-50">Anuluj</button>
-          <button onClick={save} disabled={saving} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-50">{saving ? 'Zapisywanie…' : 'Zapisz rozdanie'}</button>
+          <button onClick={save} disabled={saving} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-50">
+            {saving ? 'Zapisywanie…' : (ack && issues && issues.errors.length === 0 && issues.warnings.length > 0 ? 'Zapisz mimo ostrzeżeń' : 'Zapisz rozdanie')}
+          </button>
         </div>
       </div>
     </div>

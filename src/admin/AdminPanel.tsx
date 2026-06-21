@@ -3,6 +3,7 @@ import type { Deal } from '../types';
 import type { DealRecord } from '../hooks/useDeals';
 import { DealBuilder } from './DealBuilder';
 import { UsersAdmin } from './UsersAdmin';
+import { validateDeal } from '../lib/validateDeal';
 
 type Tab = 'deals' | 'users';
 
@@ -86,13 +87,15 @@ export function AdminPanel({ allDeals, loading, error, onAdd, onUpdate, onArchiv
         const deals: Deal[] = Array.isArray(parsed) ? parsed : [parsed];
         if (!deals.every(d => d.id && d.title)) throw new Error('nieprawidłowy format');
         setBusy(true);
-        let ok = 0; let failed = 0;
+        let ok = 0; let skipped = 0; const reasons: string[] = [];
         for (const d of deals) {
+          const v = validateDeal(d);
+          if (v.errors.length) { skipped++; reasons.push(`„${d.title}": ${v.errors[0]}`); continue; }
           const res = await onAdd(d);
-          if (res.error) failed++; else ok++;
+          if (res.error) { skipped++; reasons.push(`„${d.title}": ${res.error}`); } else ok++;
         }
         setBusy(false);
-        if (failed) showErr(`Zaimportowano ${ok}, błędów: ${failed}.`);
+        if (skipped) showErr(`Zaimportowano ${ok}, pominięto ${skipped} z błędami (np. ${reasons[0]}).`);
         else showFlash(`Zaimportowano ${ok} rozdań.`);
       } catch (err) {
         setBusy(false);
