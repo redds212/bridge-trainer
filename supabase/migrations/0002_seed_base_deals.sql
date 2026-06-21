@@ -6,62 +6,6 @@ insert into public.deals
   (id, title, category, difficulty, contract, declarer, dealer, vulnerability,
    bidding, initial_hands, intro_sequence, decision_prompt, solution, is_base, archived)
 values
-  ('deal-101', 'Uniknięcie niebezpiecznego obrońcy', 'Rozgrywający', 'Medium', '1NT',
-   'W', 'E', 'None',
-   '[["P","P"],["1NT","P","P","P"]]'::jsonb, '{"W":{"S":"AQ8","H":"AKQ76","D":"J4","C":"J75"},"E":{"S":"J102","H":"1094","D":"852","C":"A432"},"N":{"hidden":true},"S":{"hidden":true}}'::jsonb, '[{"trick":1,"leader":"N","cards":{"N":"C8","E":"CA","S":"C6","W":"C5"},"winner":"E"},{"trick":2,"leader":"E","cards":{"E":"C2"}}]'::jsonb, 'Wschód wziął pierwszą lewę Asem trefl i odszedł w trefle do Twojej ręki. Jak zaplanujesz rozegranie koloru pikowego, aby zminimalizować ryzyko wejścia Południa do gry?', '{"text":"Należy zagrać małego pika w kierunku Damy (impas). Jeśli Dama przegra na Króla u Północy — nie szkodzi: Północ nie ma bezpiecznego wyjścia w trefle, które trafiłyby do ręki groźnego Południa. Gdybyś zamiast tego grał Asa i potem Damę, Południe mogłoby wejść Królem i zaatakować trefle, niszcząc kontrakt.","revealAllCards":{"N":{"S":"K73","H":"J32","D":"Q97","C":"9842"},"S":{"S":"9654","H":"85","D":"AK1063","C":"K10"}},"continuationTricks":[{"trick":2,"leader":"W","cards":{"W":"S8","N":"SK3","E":"S2","S":"S4"},"winner":"N"}]}'::jsonb, true, false)
-on conflict (id) do update set
-  title = excluded.title, category = excluded.category, difficulty = excluded.difficulty,
-  contract = excluded.contract, declarer = excluded.declarer, dealer = excluded.dealer,
-  vulnerability = excluded.vulnerability, bidding = excluded.bidding,
-  initial_hands = excluded.initial_hands, intro_sequence = excluded.intro_sequence,
-  decision_prompt = excluded.decision_prompt, solution = excluded.solution, is_base = true;
-
-insert into public.deals
-  (id, title, category, difficulty, contract, declarer, dealer, vulnerability,
-   bidding, initial_hands, intro_sequence, decision_prompt, solution, is_base, archived)
-values
-  ('deal-102', 'Impas podwójny w karze', 'Rozgrywający', 'Hard', '3NT',
-   'S', 'W', 'NS',
-   '[["P"],["1H","P","2NT","P"],["3NT","P","P","P"]]'::jsonb, '{"S":{"S":"AQ4","H":"KQ5","D":"AQ10","C":"J854"},"N":{"S":"K82","H":"A762","D":"J54","C":"A73"},"E":{"hidden":true},"W":{"hidden":true}}'::jsonb, '[{"trick":1,"leader":"E","cards":{"E":"S6","S":"S4","W":"S9","N":"SK2"},"winner":"N"},{"trick":2,"leader":"N","cards":{"N":"D4"}}]'::jsonb, 'Dziadek wziął pierwszą lewę. Grasz teraz lewy 2 od dziadka — Walet karo. Jak rozgrywasz ten kolor, aby przy 9 lewach wymaganych w 3BA zebrać maksymalnie lew z kara przy ryzyku, że Zachód ma Króla i Damę?', '{"text":"Zagraj Waleta karo od dziadka — jeśli Wschód nie kryje, puszczasz (impas). Jeśli Wschód kryje Damą, bijesz Asem. Następnie grasz 10 karo (kolejny impas): jeśli znów nie kryją, puszczasz. Ta linia impasu podwójnego daje 3 lewy karowe kiedy obu honorów broni Wschód.","revealAllCards":{"E":{"S":"J765","H":"J103","D":"KQ72","C":"Q2"},"W":{"S":"1093","H":"984","D":"9863","C":"K106"}},"continuationTricks":[{"trick":2,"leader":"S","cards":{"S":"D10","W":"D3","N":"DJ","E":"DQ"},"winner":"S"}]}'::jsonb, true, false)
-on conflict (id) do update set
-  title = excluded.title, category = excluded.category, difficulty = excluded.difficulty,
-  contract = excluded.contract, declarer = excluded.declarer, dealer = excluded.dealer,
-  vulnerability = excluded.vulnerability, bidding = excluded.bidding,
-  initial_hands = excluded.initial_hands, intro_sequence = excluded.intro_sequence,
-  decision_prompt = excluded.decision_prompt, solution = excluded.solution, is_base = true;
-
-insert into public.deals
-  (id, title, category, difficulty, contract, declarer, dealer, vulnerability,
-   bidding, initial_hands, intro_sequence, decision_prompt, solution, is_base, archived)
-values
-  ('deal-103', 'Zliczanie kart — rozgrywka w serce', 'Rozgrywający', 'Easy', '4H',
-   'N', 'S', 'All',
-   '[["P"],["1H","P","3H","P"],["4H","P","P","P"]]'::jsonb, '{"N":{"S":"AK5","H":"AKJ73","D":"A4","C":"Q85"},"S":{"S":"Q82","H":"Q1052","D":"K63","C":"A64"},"E":{"hidden":true},"W":{"hidden":true}}'::jsonb, '[{"trick":1,"leader":"E","cards":{"E":"CJ","S":"CA","W":"C2","N":"C5"},"winner":"S"},{"trick":2,"leader":"S","cards":{"S":"H2","W":"H4","N":"HA"}}]'::jsonb, 'Grasz lewy kirowymi z góry — As wziął. Widzisz, że Wschód nie dołożył (wolant). Czy powinieneś zagrać Króla kier i potem Waleta (zakładając układy 2-2 lub 3-1), czy może wrócić do dziadka i zagrać Damę dla impasu waliłkowego?', '{"text":"Po asie kier, Wschód nie dołożył — musi być 4-1 (lub 1-4). Zagraj Króla kier: jeśli Zachód wypadnie, Walet jest piątym kolorem. Jeśli nie, Wschód ma 4 kiery i powinieneś zagrać impas przez Waleta. Zliczanie kart pozwala podjąć właściwą decyzję.","revealAllCards":{"E":{"S":"J1074","H":"9864","D":"Q75","C":"J10"},"W":{"S":"963","H":"void","D":"J10982","C":"K9732"}},"continuationTricks":[{"trick":2,"leader":"N","cards":{"N":"HK","E":"H8","S":"H5","W":"D2"},"winner":"N"}]}'::jsonb, true, false)
-on conflict (id) do update set
-  title = excluded.title, category = excluded.category, difficulty = excluded.difficulty,
-  contract = excluded.contract, declarer = excluded.declarer, dealer = excluded.dealer,
-  vulnerability = excluded.vulnerability, bidding = excluded.bidding,
-  initial_hands = excluded.initial_hands, intro_sequence = excluded.intro_sequence,
-  decision_prompt = excluded.decision_prompt, solution = excluded.solution, is_base = true;
-
-insert into public.deals
-  (id, title, category, difficulty, contract, declarer, dealer, vulnerability,
-   bidding, initial_hands, intro_sequence, decision_prompt, solution, is_base, archived)
-values
-  ('deal-104', 'Eliminacja i wrzutka', 'Rozgrywający', 'Hard', '4S',
-   'W', 'N', 'EW',
-   '[["P","1H","P","1S"],["P","2S","P","4S"],["P","P","P"]]'::jsonb, '{"W":{"S":"KQ1095","H":"AQ3","D":"KJ2","C":"76"},"E":{"S":"A642","H":"K74","D":"Q85","C":"A83"},"N":{"hidden":true},"S":{"hidden":true}}'::jsonb, '[{"trick":1,"leader":"N","cards":{"N":"CK","E":"C3","S":"C2","W":"C6"},"winner":"N"},{"trick":2,"leader":"N","cards":{"N":"CQ","E":"C8","S":"C5","W":"C7"},"winner":"N"},{"trick":3,"leader":"N","cards":{"N":"C10"}}]'::jsonb, 'Obrona zaatakowała treflem i zabrała dwie pierwsze lewy. Grają trzeciego trefla. Jak powinno wyglądać Twoje dalsze zaplanowanie rozgrywki 4♠? Czy bić trzeciego trefla ręką czy dziadkiem?', '{"text":"Przerżnij trzeciego trefla RĘKĄ (not dziadkiem). Następnie: weź asy pikowe i zagraj Asa, Króla i małego kiera eliminując ten kolor. Teraz wrzuć obrońcę w kiery lub daj mu wygrać asa pik — będzie musiał zagrać karowe, dając Ci impas lub wygrać renfą. Klasyczna eliminacja i wrzutka eliminuje konieczność impasu karowego.","revealAllCards":{"N":{"S":"J8","H":"J1082","D":"A964","C":"KQJ4"},"S":{"S":"73","H":"965","D":"1073","C":"10952"}}}'::jsonb, true, false)
-on conflict (id) do update set
-  title = excluded.title, category = excluded.category, difficulty = excluded.difficulty,
-  contract = excluded.contract, declarer = excluded.declarer, dealer = excluded.dealer,
-  vulnerability = excluded.vulnerability, bidding = excluded.bidding,
-  initial_hands = excluded.initial_hands, intro_sequence = excluded.intro_sequence,
-  decision_prompt = excluded.decision_prompt, solution = excluded.solution, is_base = true;
-
-insert into public.deals
-  (id, title, category, difficulty, contract, declarer, dealer, vulnerability,
-   bidding, initial_hands, intro_sequence, decision_prompt, solution, is_base, archived)
-values
   ('deal-106', 'Test wielu lew (A) — wyciąganie atutów', 'Rozgrywający', 'Easy', '4H',
    'S', 'W', 'None',
    '[["P","1H","P","4H"],["P","P","P"]]'::jsonb, '{"S":{"S":"AK3","H":"AKQJ8","D":"A54","C":"Q6"},"N":{"S":"Q75","H":"1072","D":"KQJ","C":"K543"},"E":{"hidden":true},"W":{"hidden":true}}'::jsonb, '[{"trick":1,"leader":"W","cards":{"W":"C10","N":"C3","E":"CA","S":"C6"},"winner":"E"},{"trick":2,"leader":"E","cards":{"E":"CJ","S":"CQ","W":"C9","N":"C4"},"winner":"S"},{"trick":3,"leader":"S","cards":{"S":"HA","W":"H3","N":"H2","E":"H5"},"winner":"S"},{"trick":4,"leader":"S","cards":{"S":"HK","W":"H4","N":"H7","E":"H6"},"winner":"S"},{"trick":5,"leader":"S","cards":{"S":"HQ","W":"D2"}}]'::jsonb, 'Zabrałeś 2 lewy treflowe i 2 rundy atutów. Grasz Damę kier — Zachód zrzuca karowego (wolant w kierach!), Wschód ma jeszcze jednego kiera. Czy wyciągnąć ostatniego atu Damą kier, czy od razu zakasować lewy karowe z dziadka (KQJ)?', '{"text":"Wyciągnij ostatniego atu Damą kier! Standardowa zasada: wyciągnij wszystkie atuty zanim zaczniesz zbierać lewy boczne. Gdybyś poszedł po lewy karowe bez wyciągnięcia ostatniego atu, Wschód mógłby wejść z kierem i przebić Twoją lewę karową od dziadka, niszcząc kontrakt.","revealAllCards":{"E":{"S":"J109","H":"965","D":"10987","C":"AJ2"},"W":{"S":"8642","H":"43","D":"632","C":"10987"}},"continuationTricks":[{"trick":5,"leader":"S","cards":{"S":"HQ","W":"D2","N":"H10","E":"H9"},"winner":"S"}]}'::jsonb, true, false)
@@ -79,20 +23,6 @@ values
   ('deal-107', 'Test wielu lew (B) — garda w kierach', 'Obrona', 'Medium', '3NT',
    'S', 'N', 'None',
    '[["1NT","P","3NT","P"],["P","P"]]'::jsonb, '{"W":{"S":"KQ97","H":"J52","D":"K85","C":"Q43"},"E":{"S":"843","H":"A1074","D":"Q73","C":"J65"},"N":{"hidden":true},"S":{"hidden":true}}'::jsonb, '[{"trick":1,"leader":"W","cards":{"W":"S7","N":"S5","E":"S8","S":"SA"},"winner":"S"},{"trick":2,"leader":"S","cards":{"S":"C8","W":"C3","N":"C2","E":"C5"},"winner":"S"},{"trick":3,"leader":"S","cards":{"S":"C9","W":"C4","N":"C7","E":"C6"},"winner":"S"},{"trick":4,"leader":"S","cards":{"S":"C10","W":"CQ","N":"CA","E":"CJ"},"winner":"N"},{"trick":5,"leader":"N","cards":{"N":"H9"}}]'::jsonb, 'Rozgrywający zabrał 4 lewy (pika i trzy trefle), dziadek wziął czwartą Asem trefl. Dziadek zagrał teraz 9 kier. Twój partner (Wschód) dołożył 4 kier, a rozgrywający wziął Królem kier. Ty (Zachód) masz J52 w kierach. Czy zrzucasz Waleta kier (odblokowanie dla Wschodu), czy zatrzymujesz Waleta (H2 lub H5) jako gardę?', '{"text":"Zachowaj Waleta kier! Nie zrzucaj gardy. Wschód ma A107 kier — razem macie 2 lewy kierkowe do zabrania gdy wejdziecie. Gdybyś zrzucił HJ, rozgrywający mógłby zagrać Damę kier i obejść Asem Wschodu, eliminując Waszą obronę w tym kolorze. Garda Waleta kier jest kluczowym stopem dla obrony.","revealAllCards":{"N":{"S":"J65","H":"986","D":"AJ96","C":"A72"},"S":{"S":"A102","H":"KQ3","D":"1042","C":"K1098"}},"continuationTricks":[{"trick":5,"leader":"N","cards":{"N":"H9","E":"H4","S":"HK","W":"H5"},"winner":"S"}]}'::jsonb, true, false)
-on conflict (id) do update set
-  title = excluded.title, category = excluded.category, difficulty = excluded.difficulty,
-  contract = excluded.contract, declarer = excluded.declarer, dealer = excluded.dealer,
-  vulnerability = excluded.vulnerability, bidding = excluded.bidding,
-  initial_hands = excluded.initial_hands, intro_sequence = excluded.intro_sequence,
-  decision_prompt = excluded.decision_prompt, solution = excluded.solution, is_base = true;
-
-insert into public.deals
-  (id, title, category, difficulty, contract, declarer, dealer, vulnerability,
-   bidding, initial_hands, intro_sequence, decision_prompt, solution, is_base, archived)
-values
-  ('deal-105', 'Wist bez wzięcia — obrona pasywna', 'Obrona', 'Medium', '3NT',
-   'S', 'W', 'None',
-   '[["P","P","P"],["1NT","P","3NT","P"],["P","P"]]'::jsonb, '{"W":{"S":"J9752","H":"Q83","D":"Q4","C":"K72"},"E":{"S":"K84","H":"J1065","D":"762","C":"943"},"N":{"hidden":true},"S":{"hidden":true}}'::jsonb, '[{"trick":1,"leader":"W","cards":{"W":"S5","N":"S3","E":"SK8","S":"SA"},"winner":"S"},{"trick":2,"leader":"S","cards":{"S":"C5","W":"C2","N":"C6","E":"C4"},"winner":"S"},{"trick":3,"leader":"S","cards":{"S":"C8","W":"C7","N":"CQ","E":"C9"},"winner":"N"},{"trick":4,"leader":"N","cards":{"N":"C10"}}]'::jsonb, 'Rozgrywający zebrał już 3 lewy treflowe. Dziadek gra czwartego trefla. Jesteś Zachodem — twoje trefle to K72, a wzięłeś już C7. Co kładziesz teraz? Czy puszczasz tego trefla czy bijesz Królem?', '{"text":"Puść tego trefla! Nie bij Królem. Rozgrywający ma tylko 8 lew pewnych (4 trefle + 2 piki + 2 kiery lub coś podobnego) — jeśli puścisz 4. trefla, wyciągasz go do 9 lew, ale Twój Król trefl nadal jest stopem i ogranicza 10. lewę. Bicie Królem teraz oddaje mu 9. lewę za nic. Obrona pasywna często wygrywa.","revealAllCards":{"N":{"S":"Q63","H":"AK4","D":"AJ53","C":"QJ106"},"S":{"S":"A10","H":"972","D":"K1098","C":"A852"}}}'::jsonb, true, false)
 on conflict (id) do update set
   title = excluded.title, category = excluded.category, difficulty = excluded.difficulty,
   contract = excluded.contract, declarer = excluded.declarer, dealer = excluded.dealer,
