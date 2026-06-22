@@ -1,6 +1,6 @@
 // Hand-written schema types mirroring supabase/migrations/0001_init.sql.
 // Gives compile-time safety on column names for our Supabase queries.
-import type { Seat, HandData, TrickStep, Solution, AccountStatus, LearningMode, SRSStatus, SourceType } from '../types';
+import type { Seat, HandData, TrickStep, Solution, AccountStatus, LearningMode, SRSStatus, SourceType, BidAlert } from '../types';
 
 // NOTE: these are `type` aliases (not interfaces) so they satisfy
 // supabase-js's `Row extends Record<string, unknown>` constraint.
@@ -24,6 +24,7 @@ export type DealRow = {
   created_at: string;
   source_id: string | null;
   source_details: string | null;
+  bid_alerts: BidAlert[] | null;
 };
 
 export type TagRow = {
@@ -84,7 +85,7 @@ export interface Database {
     Tables: {
       deals: {
         Row: DealRow;
-        Insert: Insert<DealRow, 'is_base' | 'archived' | 'created_by' | 'created_at' | 'source_id' | 'source_details'>;
+        Insert: Insert<DealRow, 'is_base' | 'archived' | 'created_by' | 'created_at' | 'source_id' | 'source_details' | 'bid_alerts'>;
         Update: Partial<DealRow>;
         Relationships: [];
       };

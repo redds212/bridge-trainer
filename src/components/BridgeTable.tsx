@@ -67,7 +67,7 @@ export function BridgeTable({ deal, state }: Props) {
 
       {/* Bidding table — top right */}
       <div className="absolute top-3 right-3 z-10 w-64">
-        <BiddingTable bidding={deal.bidding} dealer={deal.dealer} />
+        <BiddingTable bidding={deal.bidding} dealer={deal.dealer} bidAlerts={deal.bidAlerts} />
       </div>
 
       {/* Contract box — bottom right */}

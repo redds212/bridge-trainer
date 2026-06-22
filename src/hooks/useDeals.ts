@@ -31,6 +31,7 @@ function rowToRecord(r: DealRow, tagIds: string[]): DealRecord {
     sourceId: r.source_id,
     sourceDetails: r.source_details ?? '',
     tagIds,
+    bidAlerts: r.bid_alerts ?? [],
   };
 }
 
@@ -51,6 +52,7 @@ function dealColumns(d: Deal) {
     solution: d.solution,
     source_id: d.sourceId ?? null,
     source_details: d.sourceDetails?.trim() ? d.sourceDetails.trim() : null,
+    bid_alerts: d.bidAlerts && d.bidAlerts.length ? d.bidAlerts : null,
   };
 }
 

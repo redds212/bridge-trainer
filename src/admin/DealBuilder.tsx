@@ -189,6 +189,7 @@ function dealToSt(deal: Deal): St {
     hands,
     hiddenSeats,
     bidding: deal.bidding.flat(),
+    bidExplanations: Object.fromEntries((deal.bidAlerts ?? []).map(a => [a.index, a.explanation])),
     tricks,
     decisionPrompt: deal.decisionPrompt ?? '',
     solutionText: deal.solution?.text ?? '',
@@ -232,6 +233,7 @@ interface St {
   hands: Record<Seat, string[]>;
   hiddenSeats: Set<Seat>;
   bidding: string[];
+  bidExplanations: Record<number, string>; // flatIndex → wyjaśnienie (alert)
   tricks: DraftTrick[];
   decisionPrompt: string;
   solutionText: string;
@@ -252,6 +254,7 @@ const mkInitial = (): St => ({
   hands: { N: [], E: [], S: [], W: [] },
   hiddenSeats: new Set<Seat>(['E', 'W']),
   bidding: [],
+  bidExplanations: {},
   tricks: [],
   decisionPrompt: '',
   solutionText: '',
@@ -387,7 +390,13 @@ export function DealBuilder({ initialData, isEdit, onSave, onCancel }: Props) {
     if (biddingState.disabled.has(bid)) return;
     setSt(prev => ({ ...prev, bidding: [...prev.bidding, bid] }));
   };
-  const removeBid = () => setSt(prev => ({ ...prev, bidding: prev.bidding.slice(0, -1) }));
+  const removeBid = () => setSt(prev => {
+    const idx = prev.bidding.length - 1;
+    const { [idx]: _omit, ...rest } = prev.bidExplanations;
+    return { ...prev, bidding: prev.bidding.slice(0, -1), bidExplanations: rest };
+  });
+  const setBidExplanation = (index: number, text: string) =>
+    setSt(prev => ({ ...prev, bidExplanations: { ...prev.bidExplanations, [index]: text } }));
 
   // ── save ───────────────────────────────────────────────────
   const save = async () => {
@@ -427,6 +436,9 @@ export function DealBuilder({ initialData, isEdit, onSave, onCancel }: Props) {
       tagIds: st.tagIds,
       sourceId: st.sourceId,
       sourceDetails: st.sourceDetails.trim(),
+      bidAlerts: Object.entries(st.bidExplanations)
+        .filter(([, v]) => v.trim())
+        .map(([i, v]) => ({ index: Number(i), explanation: v.trim() })),
     };
 
     // Validate beyond the live input constraints. Errors block; warnings need
@@ -671,6 +683,25 @@ export function DealBuilder({ initialData, isEdit, onSave, onCancel }: Props) {
                     (bid.includes('H') || bid.includes('D')) ? 'bg-slate-700 text-red-400' :
                     'bg-slate-700 text-white'
                   }`}>{formatBid(bid)}</span>
+                ))}
+              </div>
+            )}
+
+            {st.bidding.some(b => b !== 'P') && (
+              <div className="mb-3 bg-slate-800/40 rounded-lg p-2 border border-slate-700 space-y-1.5">
+                <div className="text-xs text-slate-400">
+                  Alerty (odzywki sztuczne) — wpisz wyjaśnienie; w diagramie pojawi się <sup className="text-amber-300 font-bold">A</sup>, a pod licytacją objaśnienie. Puste pole = brak alertu.
+                </div>
+                {st.bidding.map((bid, i) => bid === 'P' ? null : (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="w-9 flex-shrink-0 text-center text-xs font-mono font-bold text-slate-200">{formatBid(bid)}</span>
+                    <input
+                      value={st.bidExplanations[i] ?? ''}
+                      onChange={e => setBidExplanation(i, e.target.value)}
+                      placeholder="np. Precision; sztuczne, forsing…"
+                      className="flex-1 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white text-xs focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
                 ))}
               </div>
             )}

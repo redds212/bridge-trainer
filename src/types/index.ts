@@ -63,6 +63,13 @@ export interface Deal {
   tagIds?: string[];
   sourceId?: string | null;
   sourceDetails?: string;
+  bidAlerts?: BidAlert[];
+}
+
+// Alert odzywki sztucznej. `index` = pozycja w spłaszczonej licytacji (bidding.flat()).
+export interface BidAlert {
+  index: number;
+  explanation: string;
 }
 
 export interface SRSEntry {
