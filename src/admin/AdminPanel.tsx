@@ -9,8 +9,7 @@ type Tab = 'deals' | 'users';
 
 type BuilderMode =
   | { type: 'new' }
-  | { type: 'edit'; deal: Deal }
-  | { type: 'clone'; deal: Deal };
+  | { type: 'edit'; deal: Deal };
 
 interface OpResult { error?: string }
 
@@ -33,7 +32,7 @@ const DIFF_COLOR: Record<string, string> = {
   Expert: 'text-violet-400',
 };
 
-/** Editable Deal for the builder (keeps motifs/source so edit & clone preserve them). */
+/** Editable Deal for the builder (keeps motifs/source so edit preserves them). */
 function toDeal(r: DealRecord): Deal {
   const { isBase: _i, archived: _a, ...deal } = r;
   return deal;
@@ -113,11 +112,10 @@ export function AdminPanel({ allDeals, loading, error, onAdd, onUpdate, onArchiv
 
   if (builder) {
     const isEdit = builder.type === 'edit';
-    const initialData = builder.type !== 'new' ? builder.deal : undefined;
-    const cloneTitle = builder.type === 'clone' ? `Kopia: ${builder.deal.title}` : undefined;
+    const initialData = isEdit ? builder.deal : undefined;
     return (
       <DealBuilder
-        initialData={cloneTitle ? { ...initialData!, title: cloneTitle } : initialData}
+        initialData={initialData}
         isEdit={isEdit}
         onSave={async (deal) => {
           const res = isEdit ? await onUpdate(deal.id, deal) : await onAdd(deal);
@@ -253,19 +251,11 @@ export function AdminPanel({ allDeals, loading, error, onAdd, onUpdate, onArchiv
                             )
                           ) : (
                             <>
-                              {!deal.isBase && (
-                                <button
-                                  onClick={() => setBuilder({ type: 'edit', deal: toDeal(deal) })}
-                                  className="text-xs px-2.5 py-1 bg-blue-900/40 text-blue-400 rounded hover:bg-blue-900/70 transition-colors border border-blue-800/50"
-                                >
-                                  Edytuj
-                                </button>
-                              )}
                               <button
-                                onClick={() => setBuilder({ type: 'clone', deal: toDeal(deal) })}
-                                className="text-xs px-2.5 py-1 bg-slate-700 text-slate-300 rounded hover:bg-slate-600 transition-colors border border-slate-600"
+                                onClick={() => setBuilder({ type: 'edit', deal: toDeal(deal) })}
+                                className="text-xs px-2.5 py-1 bg-blue-900/40 text-blue-400 rounded hover:bg-blue-900/70 transition-colors border border-blue-800/50"
                               >
-                                Klonuj
+                                Edytuj
                               </button>
                               <button
                                 onClick={() => runOp(() => onArchive(deal.id), 'Zarchiwizowano.')}
