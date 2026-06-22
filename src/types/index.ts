@@ -28,6 +28,23 @@ export interface Solution {
   continuationTricks?: TrickStep[];
 }
 
+// Motyw techniczny (tag) — relacja M2M z rozdaniem.
+export interface Tag {
+  id: string;
+  name: string;
+}
+
+// TODO (i18n): wartości po polsku; angielską warstwę dodamy później.
+export type SourceType = 'Książka' | 'Strona WWW' | 'Turniej' | 'Własne' | 'Inne';
+export const SOURCE_TYPES: SourceType[] = ['Książka', 'Strona WWW', 'Turniej', 'Własne', 'Inne'];
+
+export interface Source {
+  id: string;
+  name: string;
+  sourceType: SourceType;
+  sourceUrl: string | null;
+}
+
 export interface Deal {
   id: string;
   title: string;
@@ -42,6 +59,10 @@ export interface Deal {
   introSequence: TrickStep[];
   decisionPrompt: string;
   solution: Solution;
+  // Opcjonalne metadane (wstecznie kompatybilne — istniejące rozdania ich nie mają).
+  tagIds?: string[];
+  sourceId?: string | null;
+  sourceDetails?: string;
 }
 
 export interface SRSEntry {

@@ -33,9 +33,15 @@ const DIFF_COLOR: Record<string, string> = {
   Expert: 'text-violet-400',
 };
 
-/** Strip DB-only fields back to a clean Deal for JSON export. */
+/** Editable Deal for the builder (keeps motifs/source so edit & clone preserve them). */
 function toDeal(r: DealRecord): Deal {
   const { isBase: _i, archived: _a, ...deal } = r;
+  return deal;
+}
+
+/** Portable Deal for JSON export — drops DB-local refs (tag/source uuids). */
+function toExportDeal(r: DealRecord): Deal {
+  const { isBase: _i, archived: _a, tagIds: _t, sourceId: _s, sourceDetails: _d, ...deal } = r;
   return deal;
 }
 
@@ -66,7 +72,7 @@ export function AdminPanel({ allDeals, loading, error, onAdd, onUpdate, onArchiv
   };
 
   const exportDeals = () => {
-    const data = JSON.stringify(customDeals.map(toDeal), null, 2);
+    const data = JSON.stringify(customDeals.map(toExportDeal), null, 2);
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

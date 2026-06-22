@@ -1,6 +1,10 @@
 import { useState, useMemo } from 'react';
 import type { Seat, Suit, Deal, HandCards, HandData, TrickStep } from '../types';
 import { validateDeal, type DealValidation } from '../lib/validateDeal';
+import { useTags } from '../hooks/useTags';
+import { useSources } from '../hooks/useSources';
+import { MotifSelect } from './MotifSelect';
+import { SourcePicker } from './SourcePicker';
 
 const SUITS: Suit[] = ['S', 'H', 'D', 'C'];
 const SUIT_SYM: Record<Suit, string> = { S: '♠', H: '♥', D: '♦', C: '♣' };
@@ -188,6 +192,9 @@ function dealToSt(deal: Deal): St {
     tricks,
     decisionPrompt: deal.decisionPrompt ?? '',
     solutionText: deal.solution?.text ?? '',
+    tagIds: deal.tagIds ?? [],
+    sourceId: deal.sourceId ?? null,
+    sourceDetails: deal.sourceDetails ?? '',
   };
 }
 
@@ -228,6 +235,9 @@ interface St {
   tricks: DraftTrick[];
   decisionPrompt: string;
   solutionText: string;
+  tagIds: string[];
+  sourceId: string | null;
+  sourceDetails: string;
 }
 
 const mkInitial = (): St => ({
@@ -245,6 +255,9 @@ const mkInitial = (): St => ({
   tricks: [],
   decisionPrompt: '',
   solutionText: '',
+  tagIds: [],
+  sourceId: null,
+  sourceDetails: '',
 });
 
 interface Props {
@@ -263,6 +276,8 @@ export function DealBuilder({ initialData, isEdit, onSave, onCancel }: Props) {
   const [saving, setSaving] = useState(false);
   const [issues, setIssues] = useState<DealValidation | null>(null);
   const [ack, setAck] = useState(false);
+  const { tags, createTag } = useTags();
+  const { sources, createSource } = useSources();
 
   const contract = `${st.contractLevel}${st.contractSuit}`;
   const contractSuitSym = st.contractSuit === 'NT' ? 'BA' : SUIT_SYM[st.contractSuit as Suit];
@@ -409,6 +424,9 @@ export function DealBuilder({ initialData, isEdit, onSave, onCancel }: Props) {
       introSequence,
       decisionPrompt: st.decisionPrompt.trim(),
       solution: { text: st.solutionText.trim(), revealAllCards },
+      tagIds: st.tagIds,
+      sourceId: st.sourceId,
+      sourceDetails: st.sourceDetails.trim(),
     };
 
     // Validate beyond the live input constraints. Errors block; warnings need
@@ -529,6 +547,33 @@ export function DealBuilder({ initialData, isEdit, onSave, onCancel }: Props) {
                       activeClass="bg-red-900/70 border-red-600 text-red-200">{l}</Toggle>
                   ))}
                 </div>
+              </div>
+            </div>
+          </Section>
+
+          {/* ── MOTYWY I ŹRÓDŁO ── */}
+          <Section title="Motywy i źródło">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Motywy techniczne</Label>
+                <MotifSelect
+                  tags={tags}
+                  selectedIds={st.tagIds}
+                  onChange={ids => setSt(p => ({ ...p, tagIds: ids }))}
+                  onCreate={createTag}
+                />
+                <p className="text-slate-500 text-xs mt-1">Wybierz z listy lub wpisz nowy motyw i naciśnij Enter.</p>
+              </div>
+              <div>
+                <Label>Źródło</Label>
+                <SourcePicker
+                  sources={sources}
+                  value={st.sourceId}
+                  onChange={id => setSt(p => ({ ...p, sourceId: id }))}
+                  onCreate={createSource}
+                  details={st.sourceDetails}
+                  onDetailsChange={v => setSt(p => ({ ...p, sourceDetails: v }))}
+                />
               </div>
             </div>
           </Section>

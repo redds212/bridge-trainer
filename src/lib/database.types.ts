@@ -1,6 +1,6 @@
 // Hand-written schema types mirroring supabase/migrations/0001_init.sql.
 // Gives compile-time safety on column names for our Supabase queries.
-import type { Seat, HandData, TrickStep, Solution, AccountStatus, LearningMode, SRSStatus } from '../types';
+import type { Seat, HandData, TrickStep, Solution, AccountStatus, LearningMode, SRSStatus, SourceType } from '../types';
 
 // NOTE: these are `type` aliases (not interfaces) so they satisfy
 // supabase-js's `Row extends Record<string, unknown>` constraint.
@@ -22,6 +22,27 @@ export type DealRow = {
   archived: boolean;
   created_by: string | null;
   created_at: string;
+  source_id: string | null;
+  source_details: string | null;
+};
+
+export type TagRow = {
+  id: string;
+  name: string;
+  created_at: string;
+};
+
+export type SourceRow = {
+  id: string;
+  name: string;
+  source_type: SourceType;
+  source_url: string | null;
+  created_at: string;
+};
+
+export type DealTagRow = {
+  deal_id: string;
+  tag_id: string;
 };
 
 export type ProfileRow = {
@@ -63,8 +84,26 @@ export interface Database {
     Tables: {
       deals: {
         Row: DealRow;
-        Insert: Insert<DealRow, 'is_base' | 'archived' | 'created_by' | 'created_at'>;
+        Insert: Insert<DealRow, 'is_base' | 'archived' | 'created_by' | 'created_at' | 'source_id' | 'source_details'>;
         Update: Partial<DealRow>;
+        Relationships: [];
+      };
+      tags: {
+        Row: TagRow;
+        Insert: Insert<TagRow, 'id' | 'created_at'>;
+        Update: Partial<TagRow>;
+        Relationships: [];
+      };
+      sources: {
+        Row: SourceRow;
+        Insert: Insert<SourceRow, 'id' | 'source_type' | 'source_url' | 'created_at'>;
+        Update: Partial<SourceRow>;
+        Relationships: [];
+      };
+      deal_tags: {
+        Row: DealTagRow;
+        Insert: DealTagRow;
+        Update: Partial<DealTagRow>;
         Relationships: [];
       };
       profiles: {

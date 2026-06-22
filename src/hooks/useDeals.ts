@@ -11,7 +11,7 @@ export interface DealRecord extends Deal {
 
 interface OpResult { error?: string }
 
-function rowToRecord(r: DealRow): DealRecord {
+function rowToRecord(r: DealRow, tagIds: string[]): DealRecord {
   return {
     id: r.id,
     title: r.title,
@@ -28,6 +28,9 @@ function rowToRecord(r: DealRow): DealRecord {
     solution: r.solution,
     isBase: r.is_base,
     archived: r.archived,
+    sourceId: r.source_id,
+    sourceDetails: r.source_details ?? '',
+    tagIds,
   };
 }
 
@@ -46,7 +49,20 @@ function dealColumns(d: Deal) {
     intro_sequence: d.introSequence,
     decision_prompt: d.decisionPrompt,
     solution: d.solution,
+    source_id: d.sourceId ?? null,
+    source_details: d.sourceDetails?.trim() ? d.sourceDetails.trim() : null,
   };
+}
+
+/** Replace a deal's motif links with the given tag ids. */
+async function syncDealTags(dealId: string, tagIds: string[] | undefined): Promise<string | null> {
+  const { error: delErr } = await supabase.from('deal_tags').delete().eq('deal_id', dealId);
+  if (delErr) return delErr.message;
+  if (tagIds && tagIds.length) {
+    const { error: insErr } = await supabase.from('deal_tags').insert(tagIds.map(tag_id => ({ deal_id: dealId, tag_id })));
+    if (insErr) return insErr.message;
+  }
+  return null;
 }
 
 export function useDeals() {
@@ -57,17 +73,22 @@ export function useDeals() {
 
   const reload = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('deals')
-      .select('*')
-      .order('is_base', { ascending: false })
-      .order('created_at', { ascending: true });
-    if (error) {
-      setError(error.message);
+    const [dealsRes, linksRes] = await Promise.all([
+      supabase.from('deals').select('*').order('is_base', { ascending: false }).order('created_at', { ascending: true }),
+      supabase.from('deal_tags').select('deal_id, tag_id'),
+    ]);
+    if (dealsRes.error) {
+      setError(dealsRes.error.message);
       setRecords([]);
     } else {
       setError(null);
-      setRecords((data ?? []).map(rowToRecord));
+      const tagsByDeal = new Map<string, string[]>();
+      for (const link of linksRes.data ?? []) {
+        const arr = tagsByDeal.get(link.deal_id) ?? [];
+        arr.push(link.tag_id);
+        tagsByDeal.set(link.deal_id, arr);
+      }
+      setRecords((dealsRes.data ?? []).map(r => rowToRecord(r, tagsByDeal.get(r.id) ?? [])));
     }
     setLoading(false);
   }, []);
@@ -81,6 +102,8 @@ export function useDeals() {
       .from('deals')
       .insert({ id, ...dealColumns(deal), is_base: false, archived: false, created_by: user?.id ?? null });
     if (error) return { error: error.message };
+    const tagErr = await syncDealTags(id, deal.tagIds);
+    if (tagErr) return { error: tagErr };
     await reload();
     return {};
   }, [user?.id, reload]);
@@ -88,6 +111,8 @@ export function useDeals() {
   const updateDeal = useCallback(async (id: string, deal: Deal): Promise<OpResult> => {
     const { error } = await supabase.from('deals').update(dealColumns(deal)).eq('id', id);
     if (error) return { error: error.message };
+    const tagErr = await syncDealTags(id, deal.tagIds);
+    if (tagErr) return { error: tagErr };
     await reload();
     return {};
   }, [reload]);
