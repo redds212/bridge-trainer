@@ -199,6 +199,13 @@ function dealToSt(deal: Deal): St {
   };
 }
 
+// Problem rozgrywkowy: rozgrywający + dziadek (partner) widoczni, obrońcy zakryci.
+function defaultHiddenForDeclarer(declarer: Seat): Set<Seat> {
+  return (declarer === 'N' || declarer === 'S')
+    ? new Set<Seat>(['E', 'W'])
+    : new Set<Seat>(['N', 'S']);
+}
+
 // ── Auto-fill 4th hand ─────────────────────────────────────────
 
 function autoFillFourth(hands: Record<Seat, string[]>): Record<Seat, string[]> {
@@ -483,7 +490,10 @@ export function DealBuilder({ initialData, isEdit, onSave, onCancel }: Props) {
                 <Label>Kategoria</Label>
                 <div className="flex gap-2">
                   {(['Rozgrywający', 'Obrona'] as const).map(cat => (
-                    <Toggle key={cat} active={st.category === cat} onClick={() => setSt(p => ({ ...p, category: cat }))}
+                    <Toggle key={cat} active={st.category === cat} onClick={() => setSt(p => ({
+                      ...p, category: cat,
+                      hiddenSeats: cat === 'Rozgrywający' ? defaultHiddenForDeclarer(p.declarer) : p.hiddenSeats,
+                    }))}
                       activeClass="bg-blue-700 border-blue-500 text-white">{cat}</Toggle>
                   ))}
                 </div>
@@ -540,7 +550,10 @@ export function DealBuilder({ initialData, isEdit, onSave, onCancel }: Props) {
 
               <div>
                 <Label>Rozgrywający</Label>
-                <SeatPicker value={st.declarer} onChange={v => setSt(p => ({ ...p, declarer: v }))} />
+                <SeatPicker value={st.declarer} onChange={v => setSt(p => ({
+                  ...p, declarer: v,
+                  hiddenSeats: p.category === 'Rozgrywający' ? defaultHiddenForDeclarer(v) : p.hiddenSeats,
+                }))} />
               </div>
 
               <div>
