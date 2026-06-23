@@ -81,9 +81,27 @@ export function useSRS(userId: string | null) {
     mutate(id, prev => applyAnswer(prev, correct));
   }, [mutate]);
 
+  // Apply a rating computed from an explicit baseline (free-play anti-gaming):
+  // re-rating always starts from the pre-visit snapshot, so it never accumulates.
+  const applyFromSnapshot = useCallback((id: string, snapshot: SRSEntry, correct: boolean) => {
+    const next = applyAnswer(normalizeEntry(snapshot), correct);
+    const updated = { ...storeRef.current, [id]: next };
+    storeRef.current = updated;
+    setStore(updated);
+    persist(id, next);
+  }, [persist]);
+
   const finalizeBufferResult = useCallback((id: string, retrySucceeded: boolean) => {
     mutate(id, prev => finalizeBuffer(prev, retrySucceeded));
   }, [mutate]);
+
+  // Write a specific entry (used to revert a rating to a prior snapshot).
+  const setEntry = useCallback((id: string, entry: SRSEntry) => {
+    const updated = { ...storeRef.current, [id]: entry };
+    storeRef.current = updated;
+    setStore(updated);
+    persist(id, entry);
+  }, [persist]);
 
   const resetEntry = useCallback((id: string) => {
     const { [id]: _removed, ...rest } = storeRef.current;
@@ -104,5 +122,5 @@ export function useSRS(userId: string | null) {
     if (error) console.error('SRS clear-all failed:', error.message);
   }, [userId]);
 
-  return { getEntry, applyResult, finalizeBufferResult, resetEntry, clearAll, store, loading };
+  return { getEntry, applyResult, applyFromSnapshot, finalizeBufferResult, setEntry, resetEntry, clearAll, store, loading };
 }

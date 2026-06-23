@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { SRSEntry, Deal } from './types';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { LoginPage } from './auth/LoginPage';
@@ -114,13 +114,25 @@ interface TrainerProps {
 }
 
 function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session, onAdmin, onPanel }: TrainerProps) {
-  const { getEntry, applyResult } = srs;
+  const { getEntry } = srs;
 
   const selectedDeal = deals.find(d => d.id === selectedId) ?? null;
   const { state, next, prev, rewind, revealSolution, setPhase, reset } = useGameState(selectedDeal);
 
+  // Anti-gaming for free play: track the SRS snapshot before this visit's first
+  // rating, so re-rating never accumulates and RESTART can discard a positive result.
+  const visitBaseRef = useRef<{ dealId: string; snapshot: SRSEntry } | null>(null);
+  const lastCorrectRef = useRef(false);
+
+  const restoreSnapshot = (id: string, snapshot: SRSEntry) => {
+    if (snapshot.status === 'NEW' && !snapshot.lastSeen) srs.resetEntry(id);
+    else srs.setEntry(id, snapshot);
+  };
+
   useEffect(() => {
     if (selectedDeal) reset(selectedDeal);
+    visitBaseRef.current = null; // committing any prior rating
+    lastCorrectRef.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDeal?.id]);
 
@@ -142,11 +154,27 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
     if (!selectedId) return;
     if (session.active) {
       session.answer(correct); // records history + SRS (main or buffer pass)
-    } else {
-      applyResult(selectedId, correct);
-      recordHistory(selectedId, correct, 'free');
-      setPhase('rated');
+      return;
     }
+    // Establish the pre-visit baseline once; always rate FROM it, so repeating the
+    // same deal in one sitting never stacks SRS advances.
+    if (!visitBaseRef.current || visitBaseRef.current.dealId !== selectedId) {
+      visitBaseRef.current = { dealId: selectedId, snapshot: getEntry(selectedId) };
+    }
+    srs.applyFromSnapshot(selectedId, visitBaseRef.current.snapshot, correct);
+    recordHistory(selectedId, correct, 'free');
+    lastCorrectRef.current = correct;
+    setPhase('rated');
+  };
+
+  // RESTART discards a positive result (anti-gaming); a wrong result stays.
+  const handleRewind = () => {
+    const base = visitBaseRef.current;
+    if (base && base.dealId === selectedId && lastCorrectRef.current) {
+      restoreSnapshot(selectedId, base.snapshot);
+      lastCorrectRef.current = false;
+    }
+    rewind();
   };
 
   const handleNextDeal = () => {
@@ -202,7 +230,7 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
               isAnimating={state.isAnimating}
               onNext={next}
               onPrev={prev}
-              onRewind={rewind}
+              onRewind={handleRewind}
             />
 
             <DecisionPanel
