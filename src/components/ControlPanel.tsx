@@ -12,7 +12,8 @@ interface Props {
 
 export function ControlPanel({ phase, currentStep, totalSteps, isAnimating, onNext, onPrev, onRewind }: Props) {
   const atDecision = phase === 'decision' || phase === 'revealed' || phase === 'rated';
-  const canPrev = currentStep > 0 && phase === 'intro' && !isAnimating;
+  // Allow stepping back through tricks also at the decision moment (review before solving).
+  const canPrev = currentStep > 0 && !isAnimating && (phase === 'intro' || phase === 'decision');
   const canNext = !atDecision && !isAnimating;
 
   return (
