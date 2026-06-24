@@ -57,10 +57,12 @@ export function AdminPanel({ allDeals, loading, error, onAdd, onUpdate, onArchiv
   const showFlash = (msg: string) => { setFlash(msg); setTimeout(() => setFlash(''), 4000); };
   const showErr = (msg: string) => { setFlashErr(msg); setTimeout(() => setFlashErr(''), 6000); };
 
-  const customDeals = allDeals.filter(d => !d.isBase);
-  const active = allDeals.filter(d => !d.archived);
-  const archived = allDeals.filter(d => d.archived);
-  const visible = showArchived ? allDeals : active;
+  // Newest first — recently added/edited deals are easiest to find at the top.
+  const ordered = [...allDeals].sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+  const customDeals = ordered.filter(d => !d.isBase);
+  const active = ordered.filter(d => !d.archived);
+  const archived = ordered.filter(d => d.archived);
+  const visible = showArchived ? ordered : active;
 
   const runOp = async (op: () => Promise<OpResult>, okMsg: string) => {
     setBusy(true);
@@ -164,6 +166,32 @@ export function AdminPanel({ allDeals, loading, error, onAdd, onUpdate, onArchiv
             Nie udało się wczytać rozdań: {error}
           </div>
         )}
+
+        {/* Action bar — always visible at the top */}
+        <div className="flex flex-wrap gap-3 items-center">
+          <button
+            onClick={() => setBuilder({ type: 'new' })}
+            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl text-sm transition-colors shadow"
+          >
+            + Nowe rozdanie
+          </button>
+          <div className="h-6 border-l border-slate-700" />
+          <button
+            onClick={exportDeals}
+            disabled={customDeals.length === 0}
+            className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium rounded-xl text-sm transition-colors border border-slate-600 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Eksportuj JSON ({customDeals.length})
+          </button>
+          <button
+            onClick={() => importRef.current?.click()}
+            disabled={busy}
+            className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium rounded-xl text-sm transition-colors border border-slate-600 disabled:opacity-50"
+          >
+            Importuj JSON
+          </button>
+          <input ref={importRef} type="file" accept=".json" className="hidden" onChange={importDeals} />
+        </div>
 
         <div>
           <div className="flex items-center justify-between mb-3">
@@ -276,42 +304,10 @@ export function AdminPanel({ allDeals, loading, error, onAdd, onUpdate, onArchiv
           </div>
         </div>
 
-        <div className="space-y-4">
-          <h2 className="text-slate-300 font-semibold text-xs uppercase tracking-wider">Zarządzanie rozdaniami</h2>
-
-          <div className="flex flex-wrap gap-3 items-center">
-            <button
-              onClick={() => setBuilder({ type: 'new' })}
-              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl text-sm transition-colors shadow"
-            >
-              + Nowe rozdanie
-            </button>
-
-            <div className="h-6 border-l border-slate-700" />
-
-            <button
-              onClick={exportDeals}
-              disabled={customDeals.length === 0}
-              className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium rounded-xl text-sm transition-colors border border-slate-600 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Eksportuj JSON ({customDeals.length})
-            </button>
-
-            <button
-              onClick={() => importRef.current?.click()}
-              disabled={busy}
-              className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium rounded-xl text-sm transition-colors border border-slate-600 disabled:opacity-50"
-            >
-              Importuj JSON
-            </button>
-            <input ref={importRef} type="file" accept=".json" className="hidden" onChange={importDeals} />
-          </div>
-
-          <p className="text-slate-500 text-xs">
-            Rozdania są przechowywane w bazie (Supabase) i współdzielone przez wszystkich zaakceptowanych użytkowników.
-            Eksport JSON zapisuje Twoje własne rozdania jako backup; import wczytuje je z powrotem.
-          </p>
-        </div>
+        <p className="text-slate-500 text-xs">
+          Rozdania są przechowywane w bazie (Supabase) i współdzielone przez wszystkich zaakceptowanych użytkowników.
+          Eksport JSON zapisuje Twoje własne rozdania jako backup; import wczytuje je z powrotem.
+        </p>
         </>)}
       </div>
     </div>

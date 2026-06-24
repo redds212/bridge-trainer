@@ -7,6 +7,7 @@ import { useAuth } from '../auth/AuthContext';
 export interface DealRecord extends Deal {
   isBase: boolean;
   archived: boolean;
+  createdAt: string;
 }
 
 interface OpResult { error?: string }
@@ -28,6 +29,7 @@ function rowToRecord(r: DealRow, tagIds: string[]): DealRecord {
     solution: r.solution,
     isBase: r.is_base,
     archived: r.archived,
+    createdAt: r.created_at,
     sourceId: r.source_id,
     sourceDetails: r.source_details ?? '',
     tagIds,
