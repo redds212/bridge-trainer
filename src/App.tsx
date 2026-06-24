@@ -123,6 +123,7 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
   // rating, so re-rating never accumulates and RESTART can discard a positive result.
   const visitBaseRef = useRef<{ dealId: string; snapshot: SRSEntry } | null>(null);
   const lastCorrectRef = useRef(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const restoreSnapshot = (id: string, snapshot: SRSEntry) => {
     if (snapshot.status === 'NEW' && !snapshot.lastSeen) srs.resetEntry(id);
@@ -185,16 +186,36 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-950">
-      <Sidebar
-        deals={deals}
-        selectedId={selectedId}
-        getEntry={getEntry}
-        onSelect={handleSelect}
-        onAdmin={onAdmin}
-        onPanel={onPanel}
-      />
+      {/* Mobile drawer backdrop */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+
+      {/* Sidebar: off-canvas drawer on mobile, static column on desktop */}
+      <div className={`fixed md:static inset-y-0 left-0 z-40 flex-shrink-0 transition-transform duration-200 md:translate-x-0 ${
+        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+      }`}>
+        <Sidebar
+          deals={deals}
+          selectedId={selectedId}
+          getEntry={getEntry}
+          onSelect={(id) => { handleSelect(id); setSidebarOpen(false); }}
+          onAdmin={onAdmin}
+          onPanel={onPanel}
+        />
+      </div>
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Mobile top bar with hamburger */}
+        <div className="md:hidden flex items-center gap-3 px-3 py-2 bg-slate-900 border-b border-slate-700 flex-shrink-0">
+          <button onClick={() => setSidebarOpen(true)} className="text-slate-300 hover:text-white p-1" aria-label="Menu">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+          <span className="text-white text-sm font-medium truncate">{selectedDeal?.title ?? 'Trenażer Brydżowy'}</span>
+        </div>
+
         {session.active && session.progress && (
           <SessionBar progress={session.progress} onCancel={session.cancel} />
         )}

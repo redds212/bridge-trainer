@@ -180,7 +180,7 @@ export function AdminPanel({ allDeals, loading, error, onAdd, onUpdate, onArchiv
             )}
           </div>
 
-          <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+          <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto">
             {loading && allDeals.length === 0 ? (
               <div className="px-4 py-8 text-center text-slate-500 text-sm">Ładowanie rozdań…</div>
             ) : visible.length === 0 ? (

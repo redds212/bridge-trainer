@@ -59,29 +59,15 @@ export function BridgeTable({ deal, state }: Props) {
   const knownVoids = buildKnownVoids(state);
 
   return (
-    <div className="relative h-full w-full bg-felt rounded-xl border border-felt-dark shadow-2xl overflow-hidden">
-      {/* Felt texture overlay */}
-      <div className="absolute inset-0 opacity-10"
+    // Mobile: vertical scrollable stack. Desktop (md+): felt with absolute-positioned elements.
+    <div className="relative h-full w-full bg-felt rounded-xl border border-felt-dark shadow-2xl overflow-x-hidden overflow-y-auto md:overflow-hidden flex flex-col md:block">
+      {/* Felt texture overlay (desktop only) */}
+      <div className="hidden md:block absolute inset-0 opacity-10"
         style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, #fff 1px, transparent 1px)', backgroundSize: '20px 20px' }}
       />
 
-      {/* Bidding table — top right */}
-      <div className="absolute top-3 right-3 z-10 w-64">
-        <BiddingTable bidding={deal.bidding} dealer={deal.dealer} bidAlerts={deal.bidAlerts} />
-      </div>
-
-      {/* Contract box — bottom right */}
-      <div className="absolute bottom-3 right-3 z-10">
-        <ContractBox
-          contract={deal.contract}
-          declarer={deal.declarer}
-          trickScores={state.trickScores}
-          vulnerability={deal.vulnerability}
-        />
-      </div>
-
-      {/* Category + difficulty — top left */}
-      <div className="absolute top-3 left-3 z-10 flex flex-row gap-1 items-center">
+      {/* Category + difficulty */}
+      <div className="md:absolute md:top-3 md:left-3 z-10 flex flex-row gap-1 items-center p-2 md:p-0 flex-shrink-0">
         <span className="text-[10px] bg-slate-800/80 text-slate-400 px-1.5 py-0.5 rounded border border-slate-600">
           {deal.category}
         </span>
@@ -95,8 +81,13 @@ export function BridgeTable({ deal, state }: Props) {
         </span>
       </div>
 
+      {/* Bidding table */}
+      <div className="md:absolute md:top-3 md:right-3 z-10 w-full md:w-64 px-2 md:px-0 flex-shrink-0">
+        <BiddingTable bidding={deal.bidding} dealer={deal.dealer} bidAlerts={deal.bidAlerts} />
+      </div>
+
       {/* Cross layout: N top, S bottom, W left, E right */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-2 pt-14">
+      <div className="md:absolute md:inset-0 flex flex-col items-center justify-center gap-2 p-2 md:pt-14 flex-shrink-0">
 
         {/* North */}
         <HandDisplay seat="N" hand={state.hands['N']} seatPlayed={playedBySeat['N']} knownVoids={knownVoids['N']} />
@@ -106,7 +97,7 @@ export function BridgeTable({ deal, state }: Props) {
           <HandDisplay seat="W" hand={state.hands['W']} seatPlayed={playedBySeat['W']} knownVoids={knownVoids['W']} />
 
           {/* Center: trick area */}
-          <div className="bg-felt-dark/60 rounded-xl border border-felt-dark w-32 h-32 flex items-center justify-center shadow-inner flex-shrink-0">
+          <div className="bg-felt-dark/60 rounded-xl border border-felt-dark w-24 h-24 md:w-32 md:h-32 flex items-center justify-center shadow-inner flex-shrink-0">
             <TrickDisplay
               visibleTrick={state.visibleTrick as Partial<Record<import('../types').Seat, string>>}
               leader={state.currentTrickLeader as import('../types').Seat | null}
@@ -119,6 +110,16 @@ export function BridgeTable({ deal, state }: Props) {
 
         {/* South */}
         <HandDisplay seat="S" hand={state.hands['S']} seatPlayed={playedBySeat['S']} knownVoids={knownVoids['S']} />
+      </div>
+
+      {/* Contract box */}
+      <div className="md:absolute md:bottom-3 md:right-3 z-10 flex justify-center md:block p-2 md:p-0 flex-shrink-0">
+        <ContractBox
+          contract={deal.contract}
+          declarer={deal.declarer}
+          trickScores={state.trickScores}
+          vulnerability={deal.vulnerability}
+        />
       </div>
     </div>
   );
