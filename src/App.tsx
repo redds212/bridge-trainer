@@ -185,7 +185,8 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-950">
+    // h-[100dvh] (not h-screen/100vh) so the bottom bars stay visible above mobile browser chrome.
+    <div className="flex h-[100dvh] overflow-hidden bg-slate-950">
       {/* Mobile drawer backdrop */}
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />

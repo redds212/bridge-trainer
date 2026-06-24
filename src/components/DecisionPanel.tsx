@@ -13,7 +13,9 @@ export function DecisionPanel({ phase, prompt, solutionText, onReveal, onCorrect
   if (phase === 'intro' || phase === 'rated') return null;
 
   return (
-    <div className="slide-up border-t border-slate-700 bg-slate-900/95">
+    // On mobile cap the height and scroll inside, so the answer buttons stay reachable
+    // and the panel never pushes the controls off-screen.
+    <div className="slide-up border-t border-slate-700 bg-slate-900/95 flex-shrink-0 max-h-[55dvh] overflow-y-auto md:max-h-none md:overflow-visible">
       {phase === 'decision' && (
         <div className="px-6 py-5">
           <div className="flex items-start gap-3">
