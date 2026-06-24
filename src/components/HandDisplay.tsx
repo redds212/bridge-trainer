@@ -1,5 +1,6 @@
 import type { Seat, HandData, HandCards, Suit } from '../types';
 import { SUIT_ORDER, SUIT_SYMBOLS } from './SuitIcon';
+import { SUIT_COLORS } from '../lib/suitColors';
 
 interface Props {
   seat: Seat;
@@ -28,10 +29,6 @@ function parseCards(s: string): string[] {
 }
 
 const SEAT_SHORT: Record<Seat, string> = { N: 'N', S: 'S', E: 'E', W: 'W' };
-
-const SUIT_COLOR: Record<Suit, string> = {
-  S: 'text-slate-900', H: 'text-red-600', D: 'text-red-600', C: 'text-slate-900',
-};
 
 // High to low: A K Q J 10 9 8 7 6 5 4 3 2
 const RANK_ORDER = ['A', 'K', 'Q', 'J', '10', '9', '8', '7', '6', '5', '4', '3', '2'];
@@ -65,7 +62,7 @@ export function HandDisplay({ seat, hand, seatPlayed = [], knownVoids }: Props) 
             const remaining = knownVoids?.has(suit) ? 0 : Math.max(0, HIDDEN_COUNT - played.length);
             return (
               <div key={suit} className="flex items-center gap-1 min-h-[1.4rem]">
-                <span className={`text-sm w-4 flex-shrink-0 ${SUIT_COLOR[suit]}`}>{SUIT_SYMBOLS[suit]}</span>
+                <span className="text-sm w-4 flex-shrink-0" style={{ color: SUIT_COLORS.panel[suit] }}>{SUIT_SYMBOLS[suit]}</span>
                 <div className="flex items-baseline gap-1 font-mono whitespace-nowrap">
                   {played.map((rank, i) => (
                     <span key={i} className="text-sm text-slate-300">{rank}</span>
@@ -93,7 +90,7 @@ export function HandDisplay({ seat, hand, seatPlayed = [], knownVoids }: Props) 
           const ranks = parseCards(rankStr);
           return (
             <div key={suit} className="flex items-center gap-1 min-h-[1.4rem]">
-              <span className={`text-sm w-4 flex-shrink-0 ${SUIT_COLOR[suit]}`}>{SUIT_SYMBOLS[suit]}</span>
+              <span className="text-sm w-4 flex-shrink-0" style={{ color: SUIT_COLORS.panel[suit] }}>{SUIT_SYMBOLS[suit]}</span>
               <div className="flex items-baseline gap-1 font-mono whitespace-nowrap">
                 {ranks.length ? ranks.map((rank, i) => {
                   const played = playedSet.has(`${suit}${rank}`);

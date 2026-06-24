@@ -8,9 +8,9 @@
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, sans-serif;
-  background: #0f172a;
-  color: #f1f5f9;
+  font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+  background: #0b1220;
+  color: #e8edf5;
   height: 100vh;
   overflow: hidden;
 }

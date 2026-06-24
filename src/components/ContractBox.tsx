@@ -1,4 +1,5 @@
-import type { Seat } from '../types';
+import type { Seat, Suit } from '../types';
+import { SUIT_COLORS } from '../lib/suitColors';
 
 interface Props {
   contract: string;
@@ -10,12 +11,6 @@ interface Props {
 const DECLARER_NAMES: Record<Seat, string> = { N: 'Północ', S: 'Południe', E: 'Wschód', W: 'Zachód' };
 
 const SUIT_SYM: Record<string, string> = { S: '♠', H: '♥', D: '♦', C: '♣' };
-const SUIT_COL: Record<string, string> = {
-  S: 'text-blue-300',
-  H: 'text-red-400',
-  D: 'text-orange-400',
-  C: 'text-emerald-400',
-};
 
 function ContractDisplay({ contract }: { contract: string }) {
   const match = contract.match(/^(\d)(S|H|D|C|NT)$/);
@@ -25,7 +20,7 @@ function ContractDisplay({ contract }: { contract: string }) {
   return (
     <span>
       <span className="text-white">{level}</span>
-      <span className={SUIT_COL[suit]}>{SUIT_SYM[suit]}</span>
+      <span style={{ color: SUIT_COLORS.panel[suit as Suit] }}>{SUIT_SYM[suit]}</span>
     </span>
   );
 }

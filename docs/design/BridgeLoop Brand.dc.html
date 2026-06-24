@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <style>
+    body{margin:0;background:#07090f;}
+    *{box-sizing:border-box;}
+  </style>
+</helmet>
+
+<div style="width:100%;background:#07090f;font-family:'Manrope',sans-serif;color:#e8edf5;padding-bottom:80px;">
+  <div style="max-width:1280px;margin:0 auto;padding:60px 48px 0;">
+
+    <!-- HERO -->
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:24px;">
+      <span style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.28em;color:#5f6c82;text-transform:uppercase;">System brandingu · v1</span>
+      <span style="height:1px;flex:1;background:rgba(255,255,255,.08);"></span>
+    </div>
+    <h1 style="font:700 64px/1 'Space Grotesk',sans-serif;letter-spacing:-.03em;margin:0;color:#eef2f8;">Bridge<span style="color:#34d399;">Loop</span></h1>
+    <p style="font:400 18px/1.6 'Manrope',sans-serif;color:#9aa6ba;max-width:640px;margin:18px 0 56px;">Nowa tożsamość dla trenażera brydżowego opartego o powtórki SRS. Trzy kierunki znaku łączące kolory kart z pętlą powtarzania — każdy ze znakiem, wariantem poziomym i ikoną aplikacji.</p>
+
+    <!-- SECTION: KIERUNKI -->
+    <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:24px;">
+      <h2 style="font:600 13px 'IBM Plex Mono',monospace;letter-spacing:.22em;color:#7e8aa0;text-transform:uppercase;margin:0;">01 · Trzy kierunki znaku</h2>
+      <span style="height:1px;flex:1;background:rgba(255,255,255,.06);"></span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:22px;">
+
+      <!-- ===== KIERUNEK 1 — PĘTLA ===== -->
+      <div style="background:#0e1626;border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:26px;display:flex;flex-direction:column;gap:20px;transition:transform .18s ease,border-color .18s ease;" style-hover="transform:translateY(-3px);border-color:rgba(52,211,153,.4);">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;">
+          <span style="font:600 10px 'IBM Plex Mono',monospace;letter-spacing:.22em;color:#5f6c82;">KIERUNEK 01</span>
+          <span style="font:600 14px 'Space Grotesk',sans-serif;color:#34d399;">Pętla</span>
+        </div>
+        <!-- mark plate -->
+        <div style="height:184px;border-radius:14px;background:#0a130f;border:1px solid rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;">
+          <div style="position:relative;width:150px;height:150px;">
+            <div style="position:absolute;inset:16px;border-radius:50%;border:2px solid rgba(52,211,153,.45);"></div>
+            <div style="position:absolute;top:27px;right:24px;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:10px solid #34d399;transform:rotate(132deg);"></div>
+            <div style="position:absolute;top:4px;left:50%;transform:translateX(-50%);font-size:30px;color:#cfe9df;">♠</div>
+            <div style="position:absolute;right:4px;top:50%;transform:translateY(-50%);font-size:30px;color:#e0524d;">♦</div>
+            <div style="position:absolute;bottom:4px;left:50%;transform:translateX(-50%);font-size:30px;color:#cfe9df;">♣</div>
+            <div style="position:absolute;left:4px;top:50%;transform:translateY(-50%);font-size:30px;color:#e0524d;">♥</div>
+            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;"><div style="width:9px;height:9px;border-radius:50%;background:#fbbf24;"></div></div>
+          </div>
+        </div>
+        <!-- lockup -->
+        <div style="display:flex;align-items:center;gap:13px;padding:4px 0;">
+          <div style="position:relative;width:40px;height:40px;flex-shrink:0;">
+            <div style="position:absolute;inset:5px;border-radius:50%;border:1.5px solid rgba(52,211,153,.5);"></div>
+            <div style="position:absolute;top:-1px;left:50%;transform:translateX(-50%);font-size:12px;color:#cfe9df;">♠</div>
+            <div style="position:absolute;bottom:-1px;left:50%;transform:translateX(-50%);font-size:12px;color:#e0524d;">♥</div>
+            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;"><div style="width:5px;height:5px;border-radius:50%;background:#fbbf24;"></div></div>
+          </div>
+          <div>
+            <div style="font:700 24px/1 'Space Grotesk',sans-serif;letter-spacing:-.02em;"><span style="color:#eef2f8;">Bridge</span><span style="color:#34d399;">Loop</span></div>
+            <div style="font:600 9px 'Manrope',sans-serif;letter-spacing:.2em;text-transform:uppercase;color:#7e8aa0;margin-top:4px;">System SRS</div>
+          </div>
+        </div>
+        <!-- icon + swatches -->
+        <div style="display:flex;align-items:center;gap:16px;">
+          <div style="width:64px;height:64px;border-radius:16px;background:#0a130f;border:1px solid rgba(255,255,255,.08);position:relative;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 5px 14px rgba(0,0,0,.45);">
+            <div style="position:absolute;inset:13px;border-radius:50%;border:1.5px solid rgba(52,211,153,.55);"></div>
+            <div style="position:absolute;top:6px;left:50%;transform:translateX(-50%);font-size:12px;color:#cfe9df;">♠</div>
+            <div style="position:absolute;bottom:6px;left:50%;transform:translateX(-50%);font-size:12px;color:#e0524d;">♥</div>
+            <div style="width:6px;height:6px;border-radius:50%;background:#fbbf24;"></div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;flex:1;">
+            <div style="display:flex;align-items:center;gap:8px;"><span style="width:15px;height:15px;border-radius:5px;background:#34d399;border:1px solid rgba(255,255,255,.12);"></span><span style="font:500 11px 'IBM Plex Mono',monospace;color:#7e8aa0;">#34D399 · Emerald</span></div>
+            <div style="display:flex;align-items:center;gap:8px;"><span style="width:15px;height:15px;border-radius:5px;background:#fbbf24;border:1px solid rgba(255,255,255,.12);"></span><span style="font:500 11px 'IBM Plex Mono',monospace;color:#7e8aa0;">#FBBF24 · Amber</span></div>
+            <div style="display:flex;align-items:center;gap:8px;"><span style="width:15px;height:15px;border-radius:5px;background:#0b1220;border:1px solid rgba(255,255,255,.12);"></span><span style="font:500 11px 'IBM Plex Mono',monospace;color:#7e8aa0;">#0B1220 · Granat</span></div>
+          </div>
+        </div>
+        <p style="font:400 13px/1.55 'Manrope',sans-serif;color:#8a97ad;margin:0;border-top:1px solid rgba(255,255,255,.06);padding-top:16px;">Cztery kolory krążą po pętli — dosłowny symbol nauki przez powtarzanie. Energetyczna zieleń, czytelny w skali ikony.</p>
+      </div>
+
+      <!-- ===== KIERUNEK 2 — MONOGRAM ===== -->
+      <div style="background:#0e1626;border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:26px;display:flex;flex-direction:column;gap:20px;transition:transform .18s ease,border-color .18s ease;" style-hover="transform:translateY(-3px);border-color:rgba(59,130,246,.45);">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;">
+          <span style="font:600 10px 'IBM Plex Mono',monospace;letter-spacing:.22em;color:#5f6c82;">KIERUNEK 02</span>
+          <span style="font:600 14px 'Space Grotesk',sans-serif;color:#60a5fa;">Monogram</span>
+        </div>
+        <div style="height:184px;border-radius:14px;background:#0a1020;border:1px solid rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;">
+          <div style="position:relative;width:150px;height:150px;display:flex;align-items:center;justify-content:center;">
+            <div style="position:absolute;inset:14px;border-radius:50%;border:2px solid rgba(59,130,246,.4);"></div>
+            <div style="position:absolute;top:24px;right:26px;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:10px solid #60a5fa;transform:rotate(130deg);"></div>
+            <span style="font:700 94px/1 'Space Grotesk',sans-serif;color:#3b82f6;letter-spacing:-.05em;">B</span>
+            <span style="position:absolute;right:34px;bottom:32px;font-size:26px;color:#dbe6f4;">♠</span>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:13px;padding:4px 0;">
+          <div style="position:relative;width:40px;height:40px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+            <div style="position:absolute;inset:4px;border-radius:50%;border:1.5px solid rgba(59,130,246,.5);"></div>
+            <span style="font:700 23px 'Space Grotesk',sans-serif;color:#3b82f6;">B</span>
+          </div>
+          <div>
+            <div style="font:700 24px/1 'Space Grotesk',sans-serif;letter-spacing:-.02em;"><span style="color:#eef2f8;">Bridge</span><span style="color:#60a5fa;">Loop</span></div>
+            <div style="font:600 9px 'Manrope',sans-serif;letter-spacing:.2em;text-transform:uppercase;color:#7e8aa0;margin-top:4px;">System SRS</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;">
+          <div style="width:64px;height:64px;border-radius:16px;background:#0a1020;border:1px solid rgba(255,255,255,.08);position:relative;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 5px 14px rgba(0,0,0,.45);">
+            <div style="position:absolute;inset:13px;border-radius:50%;border:1.5px solid rgba(59,130,246,.5);"></div>
+            <span style="font:700 30px 'Space Grotesk',sans-serif;color:#3b82f6;">B</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;flex:1;">
+            <div style="display:flex;align-items:center;gap:8px;"><span style="width:15px;height:15px;border-radius:5px;background:#3b82f6;border:1px solid rgba(255,255,255,.12);"></span><span style="font:500 11px 'IBM Plex Mono',monospace;color:#7e8aa0;">#3B82F6 · Blue</span></div>
+            <div style="display:flex;align-items:center;gap:8px;"><span style="width:15px;height:15px;border-radius:5px;background:#22d3ee;border:1px solid rgba(255,255,255,.12);"></span><span style="font:500 11px 'IBM Plex Mono',monospace;color:#7e8aa0;">#22D3EE · Cyan</span></div>
+            <div style="display:flex;align-items:center;gap:8px;"><span style="width:15px;height:15px;border-radius:5px;background:#0a0f1c;border:1px solid rgba(255,255,255,.12);"></span><span style="font:500 11px 'IBM Plex Mono',monospace;color:#7e8aa0;">#0A0F1C · Granat</span></div>
+          </div>
+        </div>
+        <p style="font:400 13px/1.55 'Manrope',sans-serif;color:#8a97ad;margin:0;border-top:1px solid rgba(255,255,255,.06);padding-top:16px;">Litera B w pętli powtarzania, z pikiem jako akcentem. Najbliżej obecnego, niebieskiego interfejsu — mocna ikona aplikacji.</p>
+      </div>
+
+      <!-- ===== KIERUNEK 3 — KLASYK ===== -->
+      <div style="background:#0e1626;border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:26px;display:flex;flex-direction:column;gap:20px;transition:transform .18s ease,border-color .18s ease;" style-hover="transform:translateY(-3px);border-color:rgba(47,158,99,.45);">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;">
+          <span style="font:600 10px 'IBM Plex Mono',monospace;letter-spacing:.22em;color:#5f6c82;">KIERUNEK 03</span>
+          <span style="font:600 14px 'Space Grotesk',sans-serif;color:#57c98a;">Klasyk</span>
+        </div>
+        <div style="height:184px;border-radius:14px;background:#0a130d;border:1px solid rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;">
+          <div style="position:relative;width:150px;height:150px;display:flex;align-items:center;justify-content:center;">
+            <div style="position:absolute;inset:14px;border-radius:50%;border:1.5px solid rgba(47,158,99,.32);"></div>
+            <div style="position:absolute;width:58px;height:82px;border-radius:9px;background:#0d1813;border:1px solid rgba(255,255,255,.16);transform:rotate(-12deg) translateX(-12px);"></div>
+            <div style="position:relative;width:58px;height:82px;border-radius:9px;background:#f3f6f1;transform:rotate(9deg) translateX(9px);display:flex;align-items:center;justify-content:center;box-shadow:0 7px 16px rgba(0,0,0,.4);">
+              <span style="font-size:30px;color:#16291f;">♠</span>
+              <span style="position:absolute;top:5px;left:7px;font:700 12px 'Space Grotesk',sans-serif;color:#16291f;">B</span>
+              <span style="position:absolute;bottom:5px;right:7px;font:700 12px 'Space Grotesk',sans-serif;color:#16291f;transform:rotate(180deg);">B</span>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:13px;padding:4px 0;">
+          <div style="position:relative;width:40px;height:40px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+            <div style="position:absolute;inset:3px;border-radius:50%;border:1.5px solid rgba(47,158,99,.45);"></div>
+            <div style="width:19px;height:26px;border-radius:4px;background:#f3f6f1;display:flex;align-items:center;justify-content:center;transform:rotate(8deg);"><span style="font-size:12px;color:#16291f;">♠</span></div>
+          </div>
+          <div>
+            <div style="font:700 24px/1 'Space Grotesk',sans-serif;letter-spacing:-.02em;"><span style="color:#eef2f8;">Bridge</span><span style="color:#57c98a;">Loop</span></div>
+            <div style="font:600 9px 'Manrope',sans-serif;letter-spacing:.2em;text-transform:uppercase;color:#7e8aa0;margin-top:4px;">System SRS</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;">
+          <div style="width:64px;height:64px;border-radius:16px;background:#0a130d;border:1px solid rgba(255,255,255,.08);position:relative;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 5px 14px rgba(0,0,0,.45);">
+            <div style="position:absolute;inset:13px;border-radius:50%;border:1.5px solid rgba(47,158,99,.4);"></div>
+            <div style="width:30px;height:42px;border-radius:6px;background:#f3f6f1;display:flex;align-items:center;justify-content:center;transform:rotate(8deg);"><span style="font-size:17px;color:#16291f;">♠</span></div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;flex:1;">
+            <div style="display:flex;align-items:center;gap:8px;"><span style="width:15px;height:15px;border-radius:5px;background:#2f9e63;border:1px solid rgba(255,255,255,.12);"></span><span style="font:500 11px 'IBM Plex Mono',monospace;color:#7e8aa0;">#2F9E63 · Green</span></div>
+            <div style="display:flex;align-items:center;gap:8px;"><span style="width:15px;height:15px;border-radius:5px;background:#e0524d;border:1px solid rgba(255,255,255,.12);"></span><span style="font:500 11px 'IBM Plex Mono',monospace;color:#7e8aa0;">#E0524D · Czerwień</span></div>
+            <div style="display:flex;align-items:center;gap:8px;"><span style="width:15px;height:15px;border-radius:5px;background:#0c1512;border:1px solid rgba(255,255,255,.12);"></span><span style="font:500 11px 'IBM Plex Mono',monospace;color:#7e8aa0;">#0C1512 · Zieleń nocy</span></div>
+          </div>
+        </div>
+        <p style="font:400 13px/1.55 'Manrope',sans-serif;color:#8a97ad;margin:0;border-top:1px solid rgba(255,255,255,.06);padding-top:16px;">Karta z indeksem „B” w cieniu pętli. Klubowa elegancja — sukno, zieleń i brydżowa czerwień.</p>
+      </div>
+
+    </div>
+
+    <!-- SWITCHER -->
+    <div style="margin:56px 0 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:baseline;gap:14px;flex:1;min-width:280px;">
+        <h2 style="font:600 13px 'IBM Plex Mono',monospace;letter-spacing:.22em;color:#7e8aa0;text-transform:uppercase;margin:0;">02 · Marka na ekranach</h2>
+        <span style="height:1px;flex:1;background:rgba(255,255,255,.06);"></span>
+      </div>
+      <div style="display:flex;gap:6px;background:#0e1626;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:5px;">
+        <button onClick="{{ pickPetla }}" style="border:0;cursor:pointer;border-radius:8px;padding:8px 16px;font:600 13px 'Space Grotesk',sans-serif;background:{{ b1bg }};color:{{ b1fg }};">Pętla</button>
+        <button onClick="{{ pickMono }}" style="border:0;cursor:pointer;border-radius:8px;padding:8px 16px;font:600 13px 'Space Grotesk',sans-serif;background:{{ b2bg }};color:{{ b2fg }};">Monogram</button>
+        <button onClick="{{ pickKlasyk }}" style="border:0;cursor:pointer;border-radius:8px;padding:8px 16px;font:600 13px 'Space Grotesk',sans-serif;background:{{ b3bg }};color:{{ b3fg }};">Klasyk</button>
+      </div>
+    </div>
+
+    <!-- LOGIN + LANDING -->
+    <div style="display:flex;flex-direction:column;gap:22px;">
+
+      <!-- LOGIN -->
+      <div style="border-radius:18px;border:1px solid rgba(255,255,255,.08);overflow:hidden;background:{{ t.bg }};position:relative;display:flex;align-items:center;justify-content:center;padding:36px 28px;background-image:radial-gradient(rgba(255,255,255,.05) 1px,transparent 1px);background-size:20px 20px;">
+        <div style="position:absolute;top:14px;left:16px;font:600 10px 'IBM Plex Mono',monospace;letter-spacing:.18em;color:#5f6c82;">EKRAN LOGOWANIA</div>
+        <div style="width:300px;background:{{ t.panel }};border:1px solid {{ t.line }};border-radius:18px;padding:26px 24px;box-shadow:0 24px 60px rgba(0,0,0,.5);">
+          <div style="display:flex;justify-content:center;margin-bottom:14px;">
+            <sc-if value="{{ showM1 }}" hint-placeholder-val="{{ true }}">
+              <div style="position:relative;width:54px;height:54px;">
+                <div style="position:absolute;inset:6px;border-radius:50%;border:2px solid rgba(52,211,153,.5);"></div>
+                <div style="position:absolute;top:0;left:50%;transform:translateX(-50%);font-size:13px;color:#cfe9df;">♠</div>
+                <div style="position:absolute;right:0;top:50%;transform:translateY(-50%);font-size:13px;color:#e0524d;">♦</div>
+                <div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);font-size:13px;color:#cfe9df;">♣</div>
+                <div style="position:absolute;left:0;top:50%;transform:translateY(-50%);font-size:13px;color:#e0524d;">♥</div>
+                <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;"><div style="width:6px;height:6px;border-radius:50%;background:#fbbf24;"></div></div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ showM2 }}" hint-placeholder-val="{{ true }}">
+              <div style="position:relative;width:54px;height:54px;display:flex;align-items:center;justify-content:center;">
+                <div style="position:absolute;inset:5px;border-radius:50%;border:2px solid rgba(59,130,246,.5);"></div>
+                <span style="font:700 32px 'Space Grotesk',sans-serif;color:#3b82f6;">B</span>
+                <span style="position:absolute;right:9px;bottom:8px;font-size:12px;color:#dbe6f4;">♠</span>
+              </div>
+            </sc-if>
+            <sc-if value="{{ showM3 }}" hint-placeholder-val="{{ true }}">
+              <div style="position:relative;width:54px;height:54px;display:flex;align-items:center;justify-content:center;">
+                <div style="position:absolute;inset:4px;border-radius:50%;border:1.5px solid rgba(47,158,99,.4);"></div>
+                <div style="width:26px;height:36px;border-radius:5px;background:#f3f6f1;display:flex;align-items:center;justify-content:center;transform:rotate(8deg);"><span style="font-size:15px;color:#16291f;">♠</span></div>
+              </div>
+            </sc-if>
+          </div>
+          <div style="text-align:center;font:700 22px/1 'Space Grotesk',sans-serif;letter-spacing:-.02em;"><span style="color:{{ t.text }};">Bridge</span><span style="color:{{ t.accentSoft }};">Loop</span></div>
+          <div style="text-align:center;font:500 11px 'Manrope',sans-serif;color:{{ t.dim }};margin:8px 0 20px;">{{ tagline }}</div>
+          <div style="display:flex;gap:18px;border-bottom:1px solid {{ t.line }};margin-bottom:18px;">
+            <div style="font:600 13px 'Manrope',sans-serif;color:{{ t.text }};padding-bottom:10px;border-bottom:2px solid {{ t.accent }};margin-bottom:-1px;">Zaloguj się</div>
+            <div style="font:600 13px 'Manrope',sans-serif;color:{{ t.dim }};padding-bottom:10px;">Utwórz konto</div>
+          </div>
+          <div style="font:600 11px 'Manrope',sans-serif;color:{{ t.dim }};margin-bottom:7px;">Adres e-mail</div>
+          <div style="background:{{ t.soft }};border:1px solid {{ t.line }};border-radius:9px;padding:11px 13px;font:400 13px 'Manrope',sans-serif;color:#6b788c;margin-bottom:14px;">np. jan@example.com</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;"><span style="font:600 11px 'Manrope',sans-serif;color:{{ t.dim }};">Hasło</span><span style="font:500 11px 'Manrope',sans-serif;color:{{ t.accentSoft }};">Nie pamiętasz hasła?</span></div>
+          <div style="background:{{ t.soft }};border:1px solid {{ t.line }};border-radius:9px;padding:11px 13px;font:400 13px 'Manrope',sans-serif;color:#6b788c;letter-spacing:2px;margin-bottom:20px;">••••••••</div>
+          <div style="background:{{ t.accent }};color:{{ t.btnText }};text-align:center;border-radius:9px;padding:12px;font:700 14px 'Space Grotesk',sans-serif;">Zaloguj się</div>
+          <div style="text-align:center;font:400 10px/1.5 'Manrope',sans-serif;color:{{ t.dim }};margin-top:16px;">Nowe konta wymagają akceptacji administratora przed pełnym dostępem.</div>
+        </div>
+      </div>
+
+      <!-- LANDING / APP -->
+      <div style="border-radius:18px;border:1px solid rgba(255,255,255,.08);overflow:hidden;background:{{ t.bg }};display:flex;height:560px;position:relative;">
+        <div style="position:absolute;bottom:16px;left:264px;font:600 10px 'IBM Plex Mono',monospace;letter-spacing:.18em;color:rgba(255,255,255,.35);z-index:5;">INTERFEJS — ODŚWIEŻENIE BRANDINGU</div>
+        <!-- sidebar -->
+        <div style="width:248px;flex-shrink:0;background:{{ t.panel }};border-right:1px solid {{ t.line }};padding:18px 16px;display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;align-items:center;gap:11px;">
+            <sc-if value="{{ showM1 }}" hint-placeholder-val="{{ true }}">
+              <div style="position:relative;width:34px;height:34px;flex-shrink:0;">
+                <div style="position:absolute;inset:4px;border-radius:50%;border:1.5px solid rgba(52,211,153,.5);"></div>
+                <div style="position:absolute;top:-2px;left:50%;transform:translateX(-50%);font-size:10px;color:#cfe9df;">♠</div>
+                <div style="position:absolute;bottom:-2px;left:50%;transform:translateX(-50%);font-size:10px;color:#e0524d;">♥</div>
+                <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;"><div style="width:4px;height:4px;border-radius:50%;background:#fbbf24;"></div></div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ showM2 }}" hint-placeholder-val="{{ true }}">
+              <div style="position:relative;width:34px;height:34px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+                <div style="position:absolute;inset:3px;border-radius:50%;border:1.5px solid rgba(59,130,246,.5);"></div>
+                <span style="font:700 19px 'Space Grotesk',sans-serif;color:#3b82f6;">B</span>
+              </div>
+            </sc-if>
+            <sc-if value="{{ showM3 }}" hint-placeholder-val="{{ true }}">
+              <div style="position:relative;width:34px;height:34px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+                <div style="position:absolute;inset:2px;border-radius:50%;border:1.5px solid rgba(47,158,99,.4);"></div>
+                <div style="width:16px;height:22px;border-radius:3px;background:#f3f6f1;display:flex;align-items:center;justify-content:center;transform:rotate(8deg);"><span style="font-size:10px;color:#16291f;">♠</span></div>
+              </div>
+            </sc-if>
+            <div>
+              <div style="font:700 16px/1 'Space Grotesk',sans-serif;letter-spacing:-.02em;"><span style="color:{{ t.text }};">Bridge</span><span style="color:{{ t.accentSoft }};">Loop</span></div>
+              <div style="font:500 9px 'Manrope',sans-serif;color:{{ t.dim }};margin-top:3px;">System SRS</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid {{ t.line }};border-bottom:1px solid {{ t.line }};">
+            <div style="width:26px;height:26px;border-radius:50%;background:{{ t.soft }};display:flex;align-items:center;justify-content:center;font:600 11px 'Manrope',sans-serif;color:{{ t.accentSoft }};">r</div>
+            <div style="flex:1;"><div style="font:600 12px 'Manrope',sans-serif;color:{{ t.text }};">redds</div><div style="font:400 9px 'Manrope',sans-serif;color:{{ t.dim }};">Administrator</div></div>
+            <div style="font:600 10px 'Manrope',sans-serif;color:{{ t.accentSoft }};">Panel</div>
+          </div>
+          <div style="background:{{ t.soft }};border:1px solid {{ t.line }};border-radius:10px;padding:11px 12px;">
+            <div style="font:700 9px 'Manrope',sans-serif;letter-spacing:.12em;color:{{ t.accent2 }};text-transform:uppercase;margin-bottom:6px;">★ Rekomendowane na dziś (1)</div>
+            <div style="font:600 12px 'Manrope',sans-serif;color:{{ t.text }};">Śledztwo na szlemika</div>
+          </div>
+          <div style="font:700 9px 'Manrope',sans-serif;letter-spacing:.14em;color:{{ t.dim }};text-transform:uppercase;margin-top:2px;">Rozgrywający</div>
+          <div style="display:flex;flex-direction:column;gap:3px;">
+            <div style="display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px;background:{{ t.soft }};"><span style="width:7px;height:7px;border-radius:50%;background:{{ t.accent2 }};"></span><div style="flex:1;"><div style="font:600 12px 'Manrope',sans-serif;color:{{ t.text }};">Chess play</div><div style="font:400 10px 'Manrope',sans-serif;color:{{ t.dim }};"><span style="color:{{ t.accentSoft }};">Easy</span> · Powtórka</div></div></div>
+            <div style="display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px;"><span style="width:7px;height:7px;border-radius:50%;background:{{ t.accent2 }};"></span><div style="flex:1;"><div style="font:600 12px 'Manrope',sans-serif;color:{{ t.text }};">Analiza obrońców</div><div style="font:400 10px 'Manrope',sans-serif;color:{{ t.dim }};">Medium · Powtórka</div></div></div>
+            <div style="display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px;"><span style="width:7px;height:7px;border-radius:50%;background:{{ t.dim }};"></span><div style="flex:1;"><div style="font:600 12px 'Manrope',sans-serif;color:{{ t.text }};">Śledztwo na szlemika</div><div style="font:400 10px 'Manrope',sans-serif;color:{{ t.dim }};">Medium · Nowe</div></div></div>
+            <div style="display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px;"><span style="width:7px;height:7px;border-radius:50%;background:{{ t.accent2 }};"></span><div style="flex:1;"><div style="font:600 12px 'Manrope',sans-serif;color:{{ t.text }};">Zagranie Jaggiego</div><div style="font:400 10px 'Manrope',sans-serif;color:{{ t.dim }};"><span style="color:{{ t.accentSoft }};">Easy</span> · Powtórka</div></div></div>
+          </div>
+        </div>
+
+        <!-- felt -->
+        <div style="flex:1;position:relative;background-color:{{ t.felt }};background-image:radial-gradient(rgba(255,255,255,.07) 1px,transparent 1px);background-size:18px 18px;">
+          <!-- bidding -->
+          <div style="position:absolute;top:14px;right:14px;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.14);font:600 11px 'Manrope',sans-serif;">
+            <div style="display:grid;grid-template-columns:repeat(4,42px);background:rgba(0,0,0,.35);color:rgba(255,255,255,.85);text-align:center;"><div style="padding:5px 0;">W</div><div style="padding:5px 0;">N</div><div style="padding:5px 0;">E</div><div style="padding:5px 0;">S</div></div>
+            <div style="display:grid;grid-template-columns:repeat(4,42px);color:rgba(255,255,255,.9);text-align:center;background:rgba(0,0,0,.18);"><div style="padding:5px 0;">1<span style="color:#ff6b6b;">♥</span></div><div style="padding:5px 0;color:rgba(255,255,255,.45);">Pas</div><div style="padding:5px 0;">4<span style="color:#4cc97e;">♣</span></div><div style="padding:5px 0;color:rgba(255,255,255,.45);">Pas</div></div>
+            <div style="display:grid;grid-template-columns:repeat(4,42px);color:rgba(255,255,255,.9);text-align:center;"><div style="padding:5px 0;">4<span style="color:#f0a44a;">♦</span></div><div style="padding:5px 0;color:rgba(255,255,255,.45);">Pas</div><div style="padding:5px 0;">4<span style="color:#ff6b6b;">♥</span></div><div style="padding:5px 0;color:rgba(255,255,255,.45);">Pas</div></div>
+            <div style="display:grid;grid-template-columns:repeat(4,42px);color:rgba(255,255,255,.9);text-align:center;background:rgba(0,0,0,.18);"><div style="padding:5px 0;">5<span style="color:#ff6b6b;">♥</span></div><div style="padding:5px 0;color:rgba(255,255,255,.45);">Pas</div><div style="padding:5px 0;">6<span style="color:#ff6b6b;">♥</span></div><div style="padding:5px 0;color:rgba(255,255,255,.45);">Pas</div></div>
+          </div>
+          <!-- N -->
+          <div style="position:absolute;top:96px;left:50%;transform:translateX(-50%);text-align:center;">
+            <div style="font:600 11px 'Manrope',sans-serif;color:rgba(255,255,255,.55);margin-bottom:5px;">N</div>
+            <div style="width:138px;background:{{ t.panel }};border:1px solid {{ t.line }};border-radius:11px;padding:11px 13px;text-align:left;font:600 13px/1.7 'Manrope',sans-serif;color:rgba(255,255,255,.35);">
+              <div><span style="color:#5b9be8;">♠</span> ? ? ? ?</div><div><span style="color:#e0524d;">♥</span> ? ? ? ?</div><div><span style="color:#df8a2e;">♦</span> ? ? ? ?</div><div><span style="color:#36ad63;">♣</span> ? ? ? ?</div>
+            </div>
+          </div>
+          <!-- W -->
+          <div style="position:absolute;top:300px;left:30px;text-align:center;">
+            <div style="font:600 11px 'Manrope',sans-serif;color:rgba(255,255,255,.55);margin-bottom:5px;">W</div>
+            <div style="width:138px;background:{{ t.panel }};border:1px solid {{ t.line }};border-radius:11px;padding:11px 13px;text-align:left;font:600 13px/1.7 'Manrope',sans-serif;color:#eaf0f6;">
+              <div><span style="color:#5b9be8;">♠</span> 6 5</div><div><span style="color:#e0524d;">♥</span> A Q 10 7</div><div><span style="color:#df8a2e;">♦</span> K 6 5</div><div><span style="color:#36ad63;">♣</span> 10 7 6 5</div>
+            </div>
+          </div>
+          <!-- E -->
+          <div style="position:absolute;top:300px;right:30px;text-align:center;">
+            <div style="font:600 11px 'Manrope',sans-serif;color:rgba(255,255,255,.55);margin-bottom:5px;">E</div>
+            <div style="width:138px;background:{{ t.panel }};border:1px solid {{ t.line }};border-radius:11px;padding:11px 13px;text-align:left;font:600 13px/1.7 'Manrope',sans-serif;color:#eaf0f6;">
+              <div><span style="color:#5b9be8;">♠</span> A Q 7 2</div><div><span style="color:#e0524d;">♥</span> K J 8 3 2</div><div><span style="color:#df8a2e;">♦</span> A 9 2</div><div><span style="color:#36ad63;">♣</span> A</div>
+            </div>
+          </div>
+          <!-- contract -->
+          <div style="position:absolute;bottom:18px;right:18px;background:{{ t.panel }};border:1px solid {{ t.accent }};border-radius:12px;padding:12px 18px;text-align:center;min-width:120px;">
+            <div style="font:700 8px 'Manrope',sans-serif;letter-spacing:.16em;color:{{ t.dim }};text-transform:uppercase;margin-bottom:4px;">Kontrakt</div>
+            <div style="font:700 22px 'Space Grotesk',sans-serif;color:{{ t.text }};">6<span style="color:#e0524d;">♥</span> <span style="color:{{ t.accentSoft }};">S</span></div>
+            <div style="font:400 9px 'Manrope',sans-serif;color:{{ t.dim }};margin-top:2px;">Południe</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p style="font:400 12px/1.6 'IBM Plex Mono',monospace;color:#5f6c82;margin:36px 0 0;">Przełącznik powyżej zakłada wybrany kierunek na ekran logowania i interfejs. Marki, kolory i typografia (Space Grotesk + Manrope) są spójne we wszystkich trzech wariantach.</p>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;tagline&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;System SRS — nauka przez powtarzanie&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { active: 'Pętla' };
+  renderVals() {
+    const T = {
+      'Pętla':    { bg:'#0b1220', panel:'#131c2e', soft:'#1b2740', line:'rgba(255,255,255,.09)', text:'#e8edf5', dim:'#8a97ad', accent:'#10b981', accentSoft:'#34d399', accent2:'#fbbf24', btnText:'#04130c', felt:'#155640' },
+      'Monogram': { bg:'#0a0f1c', panel:'#121a2c', soft:'#19233b', line:'rgba(255,255,255,.09)', text:'#e8edf5', dim:'#8a97ad', accent:'#3b82f6', accentSoft:'#60a5fa', accent2:'#22d3ee', btnText:'#03142e', felt:'#15543f' },
+      'Klasyk':   { bg:'#0c1512', panel:'#122019', soft:'#16291f', line:'rgba(255,255,255,.09)', text:'#eef3ee', dim:'#8ea394', accent:'#2f9e63', accentSoft:'#57c98a', accent2:'#e0524d', btnText:'#04140c', felt:'#15402c' }
+    };
+    const c = this.state.active;
+    const t = T[c] || T['Pętla'];
+    const on = (k) => this.setState({ active: k });
+    const seg = (k) => ({
+      bg: c === k ? t.accent : 'transparent',
+      fg: c === k ? t.btnText : '#8a97ad'
+    });
+    const s1 = seg('Pętla'), s2 = seg('Monogram'), s3 = seg('Klasyk');
+    return {
+      t,
+      tagline: this.props.tagline || 'System SRS — nauka przez powtarzanie',
+      showM1: c === 'Pętla', showM2: c === 'Monogram', showM3: c === 'Klasyk',
+      pickPetla: () => on('Pętla'), pickMono: () => on('Monogram'), pickKlasyk: () => on('Klasyk'),
+      b1bg: s1.bg, b1fg: s1.fg, b2bg: s2.bg, b2fg: s2.fg, b3bg: s3.bg, b3fg: s3.fg
+    };
+  }
+}
+</script>
+</body>
+</html>

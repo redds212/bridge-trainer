@@ -1,4 +1,5 @@
-import type { Seat, BidAlert } from '../types';
+import type { Seat, BidAlert, Suit } from '../types';
+import { SUIT_COLORS } from '../lib/suitColors';
 
 interface Props {
   bidding: string[][];
@@ -9,12 +10,6 @@ interface Props {
 const SEAT_ORDER: Seat[] = ['W', 'N', 'E', 'S'];
 
 const SUIT_SYM: Record<string, string> = { S: '♠', H: '♥', D: '♦', C: '♣' };
-const SUIT_COL: Record<string, string> = {
-  S: 'text-blue-400',
-  H: 'text-red-400',
-  D: 'text-orange-400',
-  C: 'text-emerald-400',
-};
 
 function bidContent(bid: string) {
   if (bid === 'P' || bid === 'Pass') return <span className="text-slate-400">Pas</span>;
@@ -27,7 +22,7 @@ function bidContent(bid: string) {
     return (
       <span>
         <span className="text-slate-200">{level}</span>
-        <span className={SUIT_COL[suit]}>{SUIT_SYM[suit]}</span>
+        <span style={{ color: SUIT_COLORS.bidding[suit as Suit] }}>{SUIT_SYM[suit]}</span>
       </span>
     );
   }
