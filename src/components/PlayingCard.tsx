@@ -1,4 +1,5 @@
-import { parseSuitCard, SuitIcon, suitColor } from './SuitIcon';
+import { parseSuitCard, SUIT_SYMBOLS } from './SuitIcon';
+import { SUIT_COLORS } from '../lib/suitColors';
 import type { Suit } from '../types';
 
 interface Props {
@@ -18,22 +19,23 @@ export function PlayingCard({ code, small = false, animated = false }: Props) {
   if (!parsed) return null;
 
   const { suit, rank } = parsed;
-  const color = suitColor(suit as Suit);
+  // Match the 4-colour diagram scheme (docs/design/README.md) on the white card face.
+  const color = SUIT_COLORS.panel[suit as Suit];
   const displayRank = RANK_DISPLAY[rank] ?? rank;
 
   if (small) {
     return (
       <span className={`inline-flex items-center gap-0.5 bg-white rounded px-1 py-0.5 shadow text-xs font-bold border border-slate-200 ${animated ? 'deal-card' : ''}`}>
-        <span className={color}>{displayRank}</span>
-        <SuitIcon suit={suit as Suit} className="text-xs" />
+        <span style={{ color }}>{displayRank}</span>
+        <span className="text-xs" style={{ color }}>{SUIT_SYMBOLS[suit as Suit]}</span>
       </span>
     );
   }
 
   return (
     <div className={`bg-white rounded-lg shadow-md border border-slate-200 flex flex-col items-center justify-center w-10 h-14 select-none ${animated ? 'deal-card' : ''}`}>
-      <span className={`text-sm font-bold leading-none ${color}`}>{displayRank}</span>
-      <SuitIcon suit={suit as Suit} className="text-base" />
+      <span className="text-sm font-bold leading-none" style={{ color }}>{displayRank}</span>
+      <span className="text-base" style={{ color }}>{SUIT_SYMBOLS[suit as Suit]}</span>
     </div>
   );
 }

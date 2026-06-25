@@ -1,11 +1,41 @@
-import type { Deal } from '../types';
+import type { Deal, Seat, Suit, HandCards } from '../types';
 import type { GameState } from '../hooks/useGameState';
 import { HandDisplay } from './HandDisplay';
 import { TrickDisplay } from './TrickDisplay';
 import { BiddingTable } from './BiddingTable';
 import { ContractBox } from './ContractBox';
 
-type Seat = import('../types').Seat;
+const SUITS: Suit[] = ['S', 'H', 'D', 'C'];
+
+// Count cards in a rank string, treating "10" as a single card.
+function countRanks(s: string): number {
+  let n = 0, i = 0;
+  while (i < s.length) {
+    if (s[i] === '1' && s[i + 1] === '0') { n += 1; i += 2; }
+    else { n += 1; i += 1; }
+  }
+  return n;
+}
+
+// Suits where all 13 cards are already visible (shown hands + played cards):
+// opponents can hold no more, so hidden-hand "?" placeholders for them are dropped.
+function buildExhaustedSuits(state: GameState, playedBySeat: Partial<Record<Seat, string[]>>): Set<Suit> {
+  const exhausted = new Set<Suit>();
+  const seats: Seat[] = ['N', 'E', 'S', 'W'];
+  for (const suit of SUITS) {
+    let visible = 0;
+    for (const seat of seats) {
+      const hand = state.hands[seat];
+      if (hand && (hand as { hidden?: true }).hidden !== true) {
+        visible += countRanks((hand as HandCards)[suit] ?? '');
+      } else {
+        visible += (playedBySeat[seat] ?? []).filter(c => c[0] === suit).length;
+      }
+    }
+    if (visible >= 13) exhausted.add(suit);
+  }
+  return exhausted;
+}
 
 function buildPlayedBySeat(state: GameState): Partial<Record<Seat, string[]>> {
   const sets: Partial<Record<Seat, Set<string>>> = {};
@@ -57,6 +87,7 @@ interface Props {
 export function BridgeTable({ deal, state }: Props) {
   const playedBySeat = buildPlayedBySeat(state);
   const knownVoids = buildKnownVoids(state);
+  const exhaustedSuits = buildExhaustedSuits(state, playedBySeat);
 
   return (
     // Mobile: vertical scrollable stack. Desktop (md+): felt with absolute-positioned elements.
@@ -90,11 +121,11 @@ export function BridgeTable({ deal, state }: Props) {
       <div className="md:absolute md:inset-0 flex flex-col items-center justify-center gap-2 p-2 md:pt-14 flex-shrink-0">
 
         {/* North */}
-        <HandDisplay seat="N" hand={state.hands['N']} seatPlayed={playedBySeat['N']} knownVoids={knownVoids['N']} />
+        <HandDisplay seat="N" hand={state.hands['N']} seatPlayed={playedBySeat['N']} knownVoids={knownVoids['N']} exhaustedSuits={exhaustedSuits} />
 
         <div className="flex items-center gap-2">
           {/* West */}
-          <HandDisplay seat="W" hand={state.hands['W']} seatPlayed={playedBySeat['W']} knownVoids={knownVoids['W']} />
+          <HandDisplay seat="W" hand={state.hands['W']} seatPlayed={playedBySeat['W']} knownVoids={knownVoids['W']} exhaustedSuits={exhaustedSuits} />
 
           {/* Center: trick area */}
           <div className="bg-black/20 rounded-xl border border-brand-line w-24 h-24 md:w-32 md:h-32 flex items-center justify-center shadow-inner flex-shrink-0">
@@ -105,11 +136,11 @@ export function BridgeTable({ deal, state }: Props) {
           </div>
 
           {/* East */}
-          <HandDisplay seat="E" hand={state.hands['E']} seatPlayed={playedBySeat['E']} knownVoids={knownVoids['E']} />
+          <HandDisplay seat="E" hand={state.hands['E']} seatPlayed={playedBySeat['E']} knownVoids={knownVoids['E']} exhaustedSuits={exhaustedSuits} />
         </div>
 
         {/* South */}
-        <HandDisplay seat="S" hand={state.hands['S']} seatPlayed={playedBySeat['S']} knownVoids={knownVoids['S']} />
+        <HandDisplay seat="S" hand={state.hands['S']} seatPlayed={playedBySeat['S']} knownVoids={knownVoids['S']} exhaustedSuits={exhaustedSuits} />
       </div>
 
       {/* Contract box */}

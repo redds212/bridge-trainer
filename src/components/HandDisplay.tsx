@@ -7,6 +7,7 @@ interface Props {
   hand: HandData;
   seatPlayed?: string[];
   knownVoids?: Set<string>; // suits (S/H/D/C) confirmed void by discarding off-suit
+  exhaustedSuits?: Set<Suit>; // suits whose 13 cards are all visible — no hidden cards remain
 }
 
 function isHidden(hand: HandData): hand is { hidden: true } {
@@ -39,7 +40,7 @@ function sortedHighToLow(ranks: string[]): string[] {
 
 const HIDDEN_COUNT = 4; // initial ? marks per suit for hidden hands
 
-export function HandDisplay({ seat, hand, seatPlayed = [], knownVoids }: Props) {
+export function HandDisplay({ seat, hand, seatPlayed = [], knownVoids, exhaustedSuits }: Props) {
   const playedSet = new Set(seatPlayed);
 
   if (isHidden(hand)) {
@@ -59,7 +60,7 @@ export function HandDisplay({ seat, hand, seatPlayed = [], knownVoids }: Props) 
         <div className="bg-brand-panel rounded-[11px] border border-brand-line px-[13px] py-[11px] flex flex-col gap-1 min-w-[105px]">
           {SUIT_ORDER.map(suit => {
             const played = sortedHighToLow(playedBySuit[suit] ?? []);
-            const remaining = knownVoids?.has(suit) ? 0 : Math.max(0, HIDDEN_COUNT - played.length);
+            const remaining = (knownVoids?.has(suit) || exhaustedSuits?.has(suit)) ? 0 : Math.max(0, HIDDEN_COUNT - played.length);
             return (
               <div key={suit} className="flex items-center gap-1 min-h-[1.4rem]">
                 <span className="text-sm w-4 flex-shrink-0" style={{ color: SUIT_COLORS.panel[suit] }}>{SUIT_SYMBOLS[suit]}</span>
