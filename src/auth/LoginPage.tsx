@@ -135,7 +135,10 @@ export function LoginPage() {
         </form>
 
         <div className="text-center text-[10px] leading-normal text-brand-dim mt-4">
-          Nowe konta wymagają akceptacji administratora przed pełnym dostępem.
+          Nowe konta wymagają akceptacji administratora przed pełnym dostępem.{' '}
+          <a href="mailto:kontakt@bridgeloop.pl" className="text-brand-accent-soft hover:underline">
+            kontakt@bridgeloop.pl
+          </a>
         </div>
       </div>
     </div>
