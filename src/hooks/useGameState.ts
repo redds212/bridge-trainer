@@ -20,6 +20,34 @@ function clockwiseOrder(leader: Seat): Seat[] {
   return [...CLOCKWISE.slice(i), ...CLOCKWISE.slice(0, i)];
 }
 
+// Recompute cumulative state (completed tricks, scores, centre cards) after a
+// given number of played intro steps. Used by `prev` so rewinding truly undoes a
+// trick: it un-reveals that trick's cards on the diagram, restores the NS/EW
+// counters, and brings back the "?" placeholders when a suit is no longer fully shown.
+function rebuildAtStep(deal: Deal, step: number) {
+  const seq = deal.introSequence;
+  const tricks: TrickStep[] = [];
+  const trickScores = { NS: 0, EW: 0 };
+  for (let i = 0; i < step; i++) {
+    const stepData = seq[i];
+    if (!stepData) continue;
+    const leader = stepData.leader as Seat;
+    const ordered = clockwiseOrder(leader).filter(s => s in (stepData.cards ?? {}));
+    if (ordered.length === 4) {
+      tricks.push(stepData);
+      if (stepData.winner === 'N' || stepData.winner === 'S') trickScores.NS += 1;
+      else if (stepData.winner === 'E' || stepData.winner === 'W') trickScores.EW += 1;
+    }
+  }
+  const lastStep = step > 0 ? seq[step - 1] : null;
+  return {
+    tricks,
+    trickScores,
+    visibleTrick: lastStep?.cards ?? {},
+    currentTrickLeader: (lastStep?.leader as Seat) ?? null,
+  };
+}
+
 function initialState(deal: Deal): GameState {
   return {
     phase: 'intro',
@@ -109,11 +137,15 @@ export function useGameState(deal: Deal | null) {
     if (!deal || !state || state.currentStep === 0 || state.isAnimating) return;
     cancelTimers();
     const prevStep = state.currentStep - 1;
-    const seq = deal.introSequence;
     setState(s => {
       if (!s) return s;
-      const prevCards = prevStep > 0 ? seq[prevStep - 1]?.cards ?? {} : {};
-      return { ...s, currentStep: prevStep, visibleTrick: prevCards, phase: 'intro', isAnimating: false };
+      return {
+        ...s,
+        ...rebuildAtStep(deal, prevStep),
+        currentStep: prevStep,
+        phase: 'intro',
+        isAnimating: false,
+      };
     });
   }, [deal, state, cancelTimers]);
 
