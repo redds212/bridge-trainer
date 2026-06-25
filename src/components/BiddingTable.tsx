@@ -12,21 +12,21 @@ const SEAT_ORDER: Seat[] = ['W', 'N', 'E', 'S'];
 const SUIT_SYM: Record<string, string> = { S: '♠', H: '♥', D: '♦', C: '♣' };
 
 function bidContent(bid: string) {
-  if (bid === 'P' || bid === 'Pass') return <span className="text-slate-400">Pas</span>;
+  if (bid === 'P' || bid === 'Pass') return <span style={{ color: 'rgba(255,255,255,.45)' }}>Pas</span>;
   if (bid === 'X') return <span className="text-red-400 font-bold">Ktr</span>;
   if (bid === 'XX') return <span className="text-blue-400 font-bold">Rktr</span>;
   const match = bid.match(/^(\d)(S|H|D|C|NT)$/);
   if (match) {
     const [, level, suit] = match;
-    if (suit === 'NT') return <span className="text-slate-200">{level}BA</span>;
+    if (suit === 'NT') return <span className="text-brand-text">{level}BA</span>;
     return (
       <span>
-        <span className="text-slate-200">{level}</span>
+        <span className="text-brand-text">{level}</span>
         <span style={{ color: SUIT_COLORS.bidding[suit as Suit] }}>{SUIT_SYM[suit]}</span>
       </span>
     );
   }
-  return <span className="text-slate-200">{bid}</span>;
+  return <span className="text-brand-text">{bid}</span>;
 }
 
 function BidCell({ bid, alerted }: { bid: string | null; alerted?: boolean }) {
@@ -67,18 +67,18 @@ export function BiddingTable({ bidding, dealer, bidAlerts = [] }: Props) {
 
   return (
     <div className="space-y-1">
-      <div className="bg-slate-800/90 rounded-lg border border-slate-600 overflow-hidden text-xs">
-        <div className="grid grid-cols-4 bg-slate-700/80">
+      <div className="bg-brand-panel rounded-[11px] border border-brand-line overflow-hidden text-xs">
+        <div className="grid grid-cols-4 bg-brand-soft">
           {SEAT_ORDER.map(s => (
-            <div key={s} className="text-center py-1 text-slate-300 font-semibold border-r border-slate-600 last:border-0">
+            <div key={s} className="text-center py-1 text-brand-dim font-semibold border-r border-brand-line last:border-0">
               {s}
             </div>
           ))}
         </div>
         {rows.map((r, ri) => (
-          <div key={ri} className="grid grid-cols-4 border-t border-slate-700">
+          <div key={ri} className="grid grid-cols-4 border-t border-brand-line">
             {r.map((cell, ci) => (
-              <div key={ci} className="text-center py-1 px-1 border-r border-slate-700 last:border-0">
+              <div key={ci} className="text-center py-1 px-1 border-r border-brand-line last:border-0">
                 <BidCell bid={cell?.bid ?? null} alerted={cell ? alertedSet.has(cell.flatIndex) : false} />
               </div>
             ))}
@@ -87,12 +87,12 @@ export function BiddingTable({ bidding, dealer, bidAlerts = [] }: Props) {
       </div>
 
       {explanations.length > 0 && (
-        <div className="bg-slate-800/90 rounded-lg border border-slate-600 px-2 py-1.5 text-xs space-y-0.5">
+        <div className="bg-brand-panel rounded-[11px] border border-brand-line px-2 py-1.5 text-xs space-y-0.5">
           {explanations.map((e, i) => (
             <div key={i} className="flex items-baseline gap-1">
               <BidCell bid={e.bid} />
-              <span className="text-slate-500">=</span>
-              <span className="text-slate-300">{e.explanation}</span>
+              <span className="text-brand-dim">=</span>
+              <span className="text-brand-text/85">{e.explanation}</span>
             </div>
           ))}
         </div>

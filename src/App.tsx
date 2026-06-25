@@ -11,6 +11,7 @@ import { useHistory } from './hooks/useHistory';
 import { useSettings } from './hooks/useSettings';
 import { useDailySession } from './hooks/useDailySession';
 import { Sidebar } from './components/Sidebar';
+import { LoopMark } from './components/LoopMark';
 import { BridgeTable } from './components/BridgeTable';
 import { ControlPanel } from './components/ControlPanel';
 import { DecisionPanel } from './components/DecisionPanel';
@@ -186,7 +187,7 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
 
   return (
     // h-[100dvh] (not h-screen/100vh) so the bottom bars stay visible above mobile browser chrome.
-    <div className="flex h-[100dvh] overflow-hidden bg-slate-950">
+    <div className="flex h-[100dvh] overflow-hidden bg-brand-bg">
       {/* Mobile drawer backdrop */}
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />
@@ -208,13 +209,13 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Mobile top bar with hamburger */}
-        <div className="md:hidden flex items-center gap-3 px-3 py-2 bg-slate-900 border-b border-slate-700 flex-shrink-0">
-          <button onClick={() => setSidebarOpen(true)} className="text-slate-300 hover:text-white p-1" aria-label="Menu">
+        <div className="md:hidden flex items-center gap-3 px-3 py-2 bg-brand-panel border-b border-brand-line flex-shrink-0">
+          <button onClick={() => setSidebarOpen(true)} className="text-brand-dim hover:text-brand-text p-1" aria-label="Menu">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
             </svg>
           </button>
-          <span className="text-white text-sm font-medium truncate">{selectedDeal?.title ?? 'Trenażer Brydżowy'}</span>
+          <span className="text-brand-text text-sm font-medium truncate">{selectedDeal?.title ?? 'BridgeLoop'}</span>
         </div>
 
         {session.active && session.progress && (
@@ -273,17 +274,17 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
 function SessionComplete({ total, onClose }: { total: number; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="bg-slate-800 border border-slate-600 rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl slide-up">
+      <div className="bg-brand-panel border border-brand-line rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl slide-up">
         <div className="text-5xl mb-3">🎉</div>
-        <h2 className="text-white font-bold text-xl mb-2">Sesja ukończona!</h2>
-        <p className="text-slate-400 text-sm mb-6">
+        <h2 className="text-brand-text font-bold text-xl mb-2">Sesja ukończona!</h2>
+        <p className="text-brand-dim text-sm mb-6">
           {total > 0
             ? `Przerobiłeś dzisiejszą pulę ${total} rozdań. Błędne wrócą jutro.`
             : 'Brak rozdań na dziś — wszystko powtórzone!'}
         </p>
         <button
           onClick={onClose}
-          className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg text-sm transition-colors"
+          className="px-6 py-2.5 bg-brand-accent hover:bg-brand-accent-soft text-brand-btn-text font-display font-bold rounded-[9px] text-sm transition-colors"
         >
           Zamknij
         </button>
@@ -304,10 +305,12 @@ function WelcomeScreen({
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-8 text-center gap-6">
-      <div>
-        <div className="text-6xl mb-4">🃏</div>
-        <h2 className="text-2xl font-bold text-white mb-2">Trenażer Brydżowy SRS</h2>
-        <p className="text-slate-400 text-sm max-w-md">
+      <div className="flex flex-col items-center">
+        <div className="mb-4"><LoopMark size={72} /></div>
+        <h2 className="font-display text-2xl font-bold tracking-[-0.02em] mb-2">
+          <span className="text-brand-text">Bridge</span><span className="text-brand-accent-soft">Loop</span>
+        </h2>
+        <p className="text-brand-dim text-sm max-w-md">
           Rozpocznij dzisiejszą sesję, aby system dobrał rozdania według algorytmu powtórek,
           albo wybierz rozdanie z listy po lewej.
         </p>
@@ -315,21 +318,21 @@ function WelcomeScreen({
 
       <button
         onClick={onStartSession}
-        className="px-7 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl text-sm transition-colors shadow-lg shadow-blue-900/40"
+        className="px-7 py-3 bg-brand-accent hover:bg-brand-accent-soft text-brand-btn-text font-display font-bold rounded-[9px] text-sm transition-colors shadow-lg shadow-black/30"
       >
         ▶ Rozpocznij dzisiejszą sesję
       </button>
 
       {due.length > 0 && (
-        <div className="bg-yellow-900/20 border border-yellow-800/40 rounded-xl p-4 max-w-sm w-full">
-          <div className="text-yellow-400 font-semibold text-sm mb-3">
-            📅 {due.length} rozdań do powtórki dziś
+        <div className="bg-brand-soft border border-brand-line rounded-[12px] p-4 max-w-sm w-full">
+          <div className="text-brand-accent-2 font-semibold text-sm mb-3 uppercase tracking-wider">
+            ★ {due.length} rozdań do powtórki dziś
           </div>
           {due.slice(0, 3).map(d => (
             <button
               key={d.id}
               onClick={() => onSelect(d.id)}
-              className="w-full text-left text-sm text-yellow-300 hover:text-yellow-200 py-1.5 px-3 rounded hover:bg-yellow-900/30 transition-colors"
+              className="w-full text-left text-sm text-brand-text/90 hover:text-brand-text py-1.5 px-3 rounded-[7px] hover:bg-brand-line/50 transition-colors"
             >
               → {d.title}
             </button>
@@ -349,10 +352,10 @@ function RatedBanner({ entry, onNext }: { entry: SRSEntry; onNext: () => void })
   return (
     <div className={`px-4 py-2 text-sm flex items-center justify-between slide-up ${
       mastered
-        ? 'bg-emerald-900/40 border-t border-emerald-700'
-        : 'bg-slate-800/80 border-t border-slate-700'
+        ? 'bg-brand-accent/15 border-t border-brand-accent/50'
+        : 'bg-brand-panel/80 border-t border-brand-line'
     }`}>
-      <div className={mastered ? 'text-emerald-300' : 'text-slate-300'}>
+      <div className={mastered ? 'text-brand-accent-soft' : 'text-brand-text/90'}>
         {mastered
           ? '🏆 Opanowane! To rozdanie trafiło do archiwum.'
           : nextDate
@@ -361,7 +364,7 @@ function RatedBanner({ entry, onNext }: { entry: SRSEntry; onNext: () => void })
       </div>
       <button
         onClick={onNext}
-        className="text-xs px-3 py-1 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded border border-slate-600 transition-colors"
+        className="text-xs px-3 py-1 bg-brand-soft hover:bg-brand-line/60 text-brand-text rounded-[7px] border border-brand-line transition-colors"
       >
         Następne →
       </button>
@@ -371,9 +374,9 @@ function RatedBanner({ entry, onNext }: { entry: SRSEntry; onNext: () => void })
 
 function LoadingScreen() {
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-4">
-      <div className="text-5xl animate-pulse">🃏</div>
-      <div className="text-slate-400 text-sm">Ładowanie…</div>
+    <div className="min-h-screen bg-brand-bg flex flex-col items-center justify-center gap-4">
+      <div className="animate-pulse"><LoopMark size={56} /></div>
+      <div className="text-brand-dim text-sm">Ładowanie…</div>
     </div>
   );
 }
@@ -389,25 +392,25 @@ function PendingScreen({ username }: { username: string }) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-      <div className="bg-slate-800 border border-slate-700 rounded-2xl p-8 max-w-md w-full text-center shadow-2xl">
+    <div className="min-h-screen bg-brand-bg flex items-center justify-center p-4">
+      <div className="bg-brand-panel border border-brand-line rounded-2xl p-8 max-w-md w-full text-center shadow-2xl">
         <div className="text-5xl mb-4">⏳</div>
-        <h2 className="text-white font-bold text-xl mb-2">Konto oczekuje na akceptację</h2>
-        <p className="text-slate-400 text-sm mb-6">
-          Cześć <span className="text-slate-200 font-medium">{username}</span>! Twoje konto zostało utworzone,
+        <h2 className="text-brand-text font-bold text-xl mb-2">Konto oczekuje na akceptację</h2>
+        <p className="text-brand-dim text-sm mb-6">
+          Cześć <span className="text-brand-text font-medium">{username}</span>! Twoje konto zostało utworzone,
           ale administrator musi je zatwierdzić, zanim uzyskasz dostęp do rozdań i systemu powtórek.
         </p>
         <div className="flex gap-2 justify-center">
           <button
             onClick={checkAgain}
             disabled={checking}
-            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
+            className="px-5 py-2.5 bg-brand-accent hover:bg-brand-accent-soft disabled:opacity-50 text-brand-btn-text rounded-[9px] text-sm font-display font-bold transition-colors"
           >
             {checking ? 'Sprawdzam…' : 'Sprawdź ponownie'}
           </button>
           <button
             onClick={logout}
-            className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-sm font-medium border border-slate-600 transition-colors"
+            className="px-5 py-2.5 bg-brand-soft hover:bg-brand-line/60 text-brand-text rounded-[9px] text-sm font-medium border border-brand-line transition-colors"
           >
             Wyloguj
           </button>

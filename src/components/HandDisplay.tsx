@@ -55,8 +55,8 @@ export function HandDisplay({ seat, hand, seatPlayed = [], knownVoids }: Props) 
 
     return (
       <div className="flex flex-col items-center gap-1">
-        <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider">{SEAT_SHORT[seat]}</div>
-        <div className="bg-slate-700/60 rounded-lg border border-slate-600 px-3 py-2 flex flex-col gap-1 min-w-[105px]">
+        <div className="text-brand-dim text-xs font-semibold uppercase tracking-wider">{SEAT_SHORT[seat]}</div>
+        <div className="bg-brand-panel rounded-[11px] border border-brand-line px-[13px] py-[11px] flex flex-col gap-1 min-w-[105px]">
           {SUIT_ORDER.map(suit => {
             const played = sortedHighToLow(playedBySuit[suit] ?? []);
             const remaining = knownVoids?.has(suit) ? 0 : Math.max(0, HIDDEN_COUNT - played.length);
@@ -65,10 +65,10 @@ export function HandDisplay({ seat, hand, seatPlayed = [], knownVoids }: Props) 
                 <span className="text-sm w-4 flex-shrink-0" style={{ color: SUIT_COLORS.panel[suit] }}>{SUIT_SYMBOLS[suit]}</span>
                 <div className="flex items-baseline gap-1 font-mono whitespace-nowrap">
                   {played.map((rank, i) => (
-                    <span key={i} className="text-sm text-slate-300">{rank}</span>
+                    <span key={i} className="text-sm text-brand-text/70">{rank}</span>
                   ))}
                   {Array.from({ length: remaining }, (_, i) => (
-                    <span key={`q${i}`} className="text-sm text-slate-400">?</span>
+                    <span key={`q${i}`} className="text-sm text-[rgba(255,255,255,.35)]">?</span>
                   ))}
                 </div>
               </div>
@@ -83,8 +83,8 @@ export function HandDisplay({ seat, hand, seatPlayed = [], knownVoids }: Props) 
 
   return (
     <div className="flex flex-col items-center gap-1">
-      <div className="text-slate-300 text-xs font-semibold uppercase tracking-wider">{SEAT_SHORT[seat]}</div>
-      <div className="bg-slate-800/80 rounded-lg border border-slate-600 px-3 py-2 flex flex-col gap-1 min-w-[105px] fade-in">
+      <div className="text-brand-dim text-xs font-semibold uppercase tracking-wider">{SEAT_SHORT[seat]}</div>
+      <div className="bg-brand-panel rounded-[11px] border border-brand-line px-[13px] py-[11px] flex flex-col gap-1 min-w-[105px] fade-in">
         {SUIT_ORDER.map(suit => {
           const rankStr = cards[suit] ?? '';
           const ranks = parseCards(rankStr);
@@ -97,12 +97,12 @@ export function HandDisplay({ seat, hand, seatPlayed = [], knownVoids }: Props) 
                   return (
                     <span
                       key={i}
-                      className={`text-sm transition-colors ${played ? 'text-slate-600' : 'text-white'}`}
+                      className={`text-sm transition-colors ${played ? 'text-brand-text/25' : 'text-brand-text'}`}
                     >
                       {rank}
                     </span>
                   );
-                }) : <span className="text-sm text-slate-500">—</span>}
+                }) : <span className="text-sm text-brand-dim">—</span>}
               </div>
             </div>
           );

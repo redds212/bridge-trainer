@@ -60,15 +60,15 @@ export function BridgeTable({ deal, state }: Props) {
 
   return (
     // Mobile: vertical scrollable stack. Desktop (md+): felt with absolute-positioned elements.
-    <div className="relative h-full w-full bg-felt rounded-xl border border-felt-dark shadow-2xl overflow-x-hidden overflow-y-auto md:overflow-hidden flex flex-col md:block">
+    <div className="relative h-full w-full bg-brand-felt rounded-xl border border-brand-line shadow-2xl overflow-x-hidden overflow-y-auto md:overflow-hidden flex flex-col md:block">
       {/* Felt texture overlay (desktop only) */}
-      <div className="hidden md:block absolute inset-0 opacity-10"
-        style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, #fff 1px, transparent 1px)', backgroundSize: '20px 20px' }}
+      <div className="hidden md:block absolute inset-0"
+        style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,.07) 1px, transparent 1px)', backgroundSize: '18px 18px' }}
       />
 
       {/* Category + difficulty */}
       <div className="md:absolute md:top-3 md:left-3 z-10 flex flex-row gap-1 items-center p-2 md:p-0 flex-shrink-0">
-        <span className="text-[10px] bg-slate-800/80 text-slate-400 px-1.5 py-0.5 rounded border border-slate-600">
+        <span className="text-[10px] bg-brand-panel/80 text-brand-dim px-1.5 py-0.5 rounded border border-brand-line">
           {deal.category}
         </span>
         <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${
@@ -97,7 +97,7 @@ export function BridgeTable({ deal, state }: Props) {
           <HandDisplay seat="W" hand={state.hands['W']} seatPlayed={playedBySeat['W']} knownVoids={knownVoids['W']} />
 
           {/* Center: trick area */}
-          <div className="bg-felt-dark/60 rounded-xl border border-felt-dark w-24 h-24 md:w-32 md:h-32 flex items-center justify-center shadow-inner flex-shrink-0">
+          <div className="bg-black/20 rounded-xl border border-brand-line w-24 h-24 md:w-32 md:h-32 flex items-center justify-center shadow-inner flex-shrink-0">
             <TrickDisplay
               visibleTrick={state.visibleTrick as Partial<Record<import('../types').Seat, string>>}
               leader={state.currentTrickLeader as import('../types').Seat | null}
