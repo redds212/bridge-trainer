@@ -27,6 +27,14 @@ const STATUS_LABEL: Record<SRSStatus, string> = {
   MASTERED: 'Opanowane',
 };
 
+// Difficulty scale within the brand palette: green → amber → orange → red.
+const DIFF_COLOR: Record<string, string> = {
+  Easy: '#34d399',   // brand-accent-soft
+  Medium: '#fbbf24', // brand-accent-2 (amber)
+  Hard: '#df8a2e',   // diamond orange
+  Expert: '#e0524d', // brand-danger (red)
+};
+
 export function Sidebar({ deals, selectedId, getEntry, onSelect, onAdmin, onPanel }: Props) {
   const { user, logout } = useAuth();
   const dueToday = deals.filter(d => isReviewDue(getEntry(d.id)));
@@ -142,7 +150,7 @@ export function Sidebar({ deals, selectedId, getEntry, onSelect, onAdmin, onPane
                       {deal.title}
                     </div>
                     <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className="text-[10px] text-brand-accent-soft">{deal.difficulty}</span>
+                      <span className="text-[10px]" style={{ color: DIFF_COLOR[deal.difficulty] ?? '#8a97ad' }}>{deal.difficulty}</span>
                       <span className="text-brand-dim text-[10px]">·</span>
                       <span className="text-[10px] text-brand-dim">{STATUS_LABEL[entry.status]}</span>
                     </div>
