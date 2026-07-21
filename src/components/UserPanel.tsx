@@ -4,6 +4,7 @@ import { normalizeEntry } from '../lib/srs';
 import { generateDailySession, modeSplit, MODE_LABELS, MODE_PROPORTIONS } from '../lib/session';
 import { todayKey, toDateKey, formatDayKey } from '../lib/date';
 import { DAILY_TARGET_MIN, DAILY_TARGET_MAX } from '../hooks/useSettings';
+import { TIMED_LIMITS, formatClock } from '../hooks/useDealTimer';
 import type { HistoryStats } from '../hooks/useHistory';
 
 interface Props {
@@ -191,6 +192,47 @@ export function UserPanel({
                 );
               })}
             </div>
+          </div>
+
+          {/* Tryb na czas — opcjonalne odliczanie zależne od opanowania rozdania */}
+          <div className="border-t border-slate-700 pt-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <label htmlFor="timed-mode" className="text-slate-300 text-sm block">Tryb na czas</label>
+                <p className="text-slate-500 text-xs mt-1 leading-relaxed">
+                  Odliczanie od wejścia w moment decyzji. Im lepiej opanowane rozdanie,
+                  tym mniej czasu. Po upływie czasu rozwiązanie odsłoni się samo.
+                </p>
+              </div>
+              <button
+                id="timed-mode"
+                role="switch"
+                aria-checked={settings.timedMode}
+                onClick={() => updateSettings({ timedMode: !settings.timedMode })}
+                className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors ${
+                  settings.timedMode ? 'bg-blue-600' : 'bg-slate-600'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+                    settings.timedMode ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+            {settings.timedMode && (
+              <div className="mt-3 flex flex-wrap gap-1.5 text-[10px]">
+                {TIMED_LIMITS.map((s, i) => (
+                  <span
+                    key={i}
+                    className="px-2 py-1 rounded bg-slate-900/40 border border-slate-700 text-slate-400 font-mono tabular-nums"
+                    title={i === 0 ? 'Nowe rozdanie' : i === TIMED_LIMITS.length - 1 ? 'Opanowane' : `Po ${i} popr. odpowiedziach`}
+                  >
+                    {i === 0 ? 'nowe' : i === TIMED_LIMITS.length - 1 ? 'opan.' : `+${i}`} · {formatClock(s)}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </section>
 

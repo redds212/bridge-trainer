@@ -7,6 +7,7 @@ import { UserPanel } from './components/UserPanel';
 import { useSRS, isReviewDue } from './hooks/useSRS';
 import { useDeals } from './hooks/useDeals';
 import { useGameState } from './hooks/useGameState';
+import { useDealTimer, timeLimitForLevel } from './hooks/useDealTimer';
 import { useHistory } from './hooks/useHistory';
 import { useSettings } from './hooks/useSettings';
 import { useDailySession } from './hooks/useDailySession';
@@ -15,6 +16,7 @@ import { LoopMark } from './components/LoopMark';
 import { BridgeTable } from './components/BridgeTable';
 import { ControlPanel } from './components/ControlPanel';
 import { DecisionPanel } from './components/DecisionPanel';
+import { DealTimer } from './components/DealTimer';
 import { SessionBar } from './components/SessionBar';
 
 type View = 'trainer' | 'admin' | 'panel';
@@ -94,6 +96,7 @@ function AppShell() {
       srs={srs}
       recordHistory={history.record}
       session={session}
+      timedMode={settings.timedMode}
       onAdmin={user.isAdmin ? () => setView('admin') : undefined}
       onPanel={() => setView('panel')}
     />
@@ -110,15 +113,26 @@ interface TrainerProps {
   srs: SRSApi;
   recordHistory: (id: string, correct: boolean, phase: 'main' | 'buffer' | 'free') => void;
   session: SessionApi;
+  timedMode: boolean;
   onAdmin?: () => void;
   onPanel: () => void;
 }
 
-function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session, onAdmin, onPanel }: TrainerProps) {
+function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session, timedMode, onAdmin, onPanel }: TrainerProps) {
   const { getEntry } = srs;
 
   const selectedDeal = deals.find(d => d.id === selectedId) ?? null;
   const { state, next, prev, rewind, revealSolution, setPhase, reset } = useGameState(selectedDeal);
+
+  // Tryb na czas: limit zależny od opanowania tego rozdania; zero → auto-odsłonięcie.
+  const timerLimit = timeLimitForLevel(selectedId ? getEntry(selectedId).consecutiveCorrect : 0);
+  const timer = useDealTimer({
+    enabled: timedMode && !!selectedDeal,
+    phase: state?.phase,
+    limitSeconds: timerLimit,
+    resetKey: selectedDeal?.id ?? null,
+    onExpire: revealSolution,
+  });
 
   // Anti-gaming for free play: track the SRS snapshot before this visit's first
   // rating, so re-rating never accumulates and RESTART can discard a positive result.
@@ -238,7 +252,8 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
           />
         ) : (
           <>
-            <div className="flex-1 p-3 min-h-0 flex flex-col">
+            <div className="relative flex-1 p-3 min-h-0 flex flex-col">
+              <DealTimer remaining={timer.remaining} limit={timerLimit} visible={timer.visible} />
               <BridgeTable deal={selectedDeal} state={state} />
             </div>
 

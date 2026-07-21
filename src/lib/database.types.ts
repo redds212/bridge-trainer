@@ -53,6 +53,7 @@ export type ProfileRow = {
   status: AccountStatus;
   daily_target: number;
   mode: LearningMode;
+  timed_mode: boolean;
   created_at: string;
 };
 
@@ -109,7 +110,7 @@ export interface Database {
       };
       profiles: {
         Row: ProfileRow;
-        Insert: Insert<ProfileRow, 'username' | 'is_admin' | 'status' | 'daily_target' | 'mode' | 'created_at'>;
+        Insert: Insert<ProfileRow, 'username' | 'is_admin' | 'status' | 'daily_target' | 'mode' | 'timed_mode' | 'created_at'>;
         Update: Partial<ProfileRow>;
         Relationships: [];
       };
@@ -129,7 +130,7 @@ export interface Database {
     Views: Empty;
     Functions: {
       update_my_settings: {
-        Args: { p_daily_target: number; p_mode: string };
+        Args: { p_daily_target: number; p_mode: string; p_timed_mode?: boolean };
         Returns: undefined;
       };
     };

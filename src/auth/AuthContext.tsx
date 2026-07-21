@@ -38,7 +38,7 @@ async function loadProfile(session: Session | null): Promise<AppUser | null> {
   const email = session.user.email ?? '';
   const { data, error } = await supabase
     .from('profiles')
-    .select('username, is_admin, status, daily_target, mode')
+    .select('username, is_admin, status, daily_target, mode, timed_mode')
     .eq('id', authId)
     .single();
 
@@ -47,7 +47,7 @@ async function loadProfile(session: Session | null): Promise<AppUser | null> {
     return {
       id: authId, email,
       username: email.split('@')[0] || 'użytkownik',
-      isAdmin: false, status: 'pending', dailyTarget: 10, mode: 'balanced',
+      isAdmin: false, status: 'pending', dailyTarget: 10, mode: 'balanced', timedMode: false,
     };
   }
   return {
@@ -57,6 +57,7 @@ async function loadProfile(session: Session | null): Promise<AppUser | null> {
     status: (data.status === 'approved' ? 'approved' : 'pending'),
     dailyTarget: data.daily_target ?? 10,
     mode: (data.mode ?? 'balanced') as LearningMode,
+    timedMode: data.timed_mode ?? false,
   };
 }
 

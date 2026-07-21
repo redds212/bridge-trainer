@@ -5,7 +5,23 @@ Stan na: 2026-06-25.
 
 ---
 
-## 1. Timer podczas rozwiązywania rozdań
+## 1. Timer podczas rozwiązywania rozdań — ✅ ZROBIONE (odliczanie „na czas")
+
+**Zrealizowany wariant (2026-07-21):** opcjonalny **tryb na czas** — odliczanie w dół, którego limit zależy od opanowania danego rozdania (SRS `consecutiveCorrect`):
+
+| poziom (`consecutiveCorrect`) | 0 (nowe) | 1 | 2 | 3 | 4 (opanowane) |
+|---|---|---|---|---|---|
+| limit | 2:00 | 1:15 | 0:45 | 0:25 | 0:15 |
+
+- **Opt-in:** przełącznik w „Mój panel → Ustawienia nauki" (kolumna `profiles.timed_mode`, zapis przez `update_my_settings`). Domyślnie wyłączony.
+- **Start:** wejście w fazę `decision`. **Bez pauzy** — biegnie też przy przeglądaniu lew wstecz (POPRZEDNI).
+- **Po zerze:** automatyczne odsłonięcie rozwiązania (`revealSolution`); użytkownik i tak sam ocenia.
+- **UI:** dyskretny licznik mono w rogu stołu ([src/components/DealTimer.tsx](src/components/DealTimer.tsx)); ostatnie 10 s na bursztynowo.
+- **Pliki:** [src/hooks/useDealTimer.ts](src/hooks/useDealTimer.ts), [src/components/DealTimer.tsx](src/components/DealTimer.tsx), [src/App.tsx](src/App.tsx) (`TrainerApp`), [src/hooks/useSettings.ts](src/hooks/useSettings.ts), [src/components/UserPanel.tsx](src/components/UserPanel.tsx), [src/auth/AuthContext.tsx](src/auth/AuthContext.tsx), typy + [supabase/migrations/0002_timed_mode.sql](supabase/migrations/0002_timed_mode.sql).
+- **⚠️ Wdrożenie:** uruchomić `0002_timed_mode.sql` w Supabase SQL Editor **przed** deployem (dodaje kolumnę + nową sygnaturę RPC).
+- **Odłożone (możliwe rozszerzenia):** zapis realnego czasu do `Attempt`/historii i średnia w panelu; użycie czasu jako sygnału SRS.
+
+<details><summary>Oryginalne notatki projektowe (przed realizacją)</summary>
 
 **Cel:** pokazać, ile czasu zajęło rozwiązanie rozdania; opcjonalnie wykorzystać czas jako sygnał trudności/postępu.
 
@@ -24,6 +40,8 @@ Stan na: 2026-06-25.
 **Pliki, których dotknie:** [src/hooks/useGameState.ts](src/hooks/useGameState.ts) (fazy), [src/App.tsx](src/App.tsx) (`TrainerApp`, `handleRate`), [src/components/DecisionPanel.tsx](src/components/DecisionPanel.tsx). Jeśli zapis — `Attempt` + tabela w Supabase ([supabase/](supabase/)).
 
 **Decyzja do podjęcia przed kodowaniem:** którą wersję zakresu (mini / ze statystyką / SRS).
+
+</details>
 
 ---
 

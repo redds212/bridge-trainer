@@ -94,6 +94,8 @@ export interface UserSettings {
   /** X — total deals per day. */
   dailyTarget: number;
   mode: LearningMode;
+  /** Opcjonalny tryb na czas — odliczanie zależne od opanowania rozdania. */
+  timedMode: boolean;
 }
 
 export type AttemptPhase = 'main' | 'buffer' | 'free';
@@ -115,4 +117,5 @@ export interface AppUser {
   status: AccountStatus;
   dailyTarget: number;
   mode: LearningMode;
+  timedMode: boolean;
 }

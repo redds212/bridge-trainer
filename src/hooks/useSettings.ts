@@ -20,6 +20,7 @@ export function useSettings(userId: string | null) {
   const [settings, setSettings] = useState<UserSettings>({
     dailyTarget: clampTarget(user?.dailyTarget ?? 10),
     mode: user?.mode ?? 'balanced',
+    timedMode: user?.timedMode ?? false,
   });
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
@@ -28,7 +29,7 @@ export function useSettings(userId: string | null) {
   // Re-sync from the profile on login / account switch.
   useEffect(() => {
     if (!user) return;
-    const s: UserSettings = { dailyTarget: clampTarget(user.dailyTarget), mode: user.mode };
+    const s: UserSettings = { dailyTarget: clampTarget(user.dailyTarget), mode: user.mode, timedMode: user.timedMode };
     setSettings(s);
     settingsRef.current = s;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -38,6 +39,7 @@ export function useSettings(userId: string | null) {
     const next: UserSettings = {
       dailyTarget: patch.dailyTarget !== undefined ? clampTarget(patch.dailyTarget) : settingsRef.current.dailyTarget,
       mode: (patch.mode ?? settingsRef.current.mode) as LearningMode,
+      timedMode: patch.timedMode ?? settingsRef.current.timedMode,
     };
     settingsRef.current = next;
     setSettings(next);
@@ -45,7 +47,11 @@ export function useSettings(userId: string | null) {
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
       if (!userId) return;
-      supabase.rpc('update_my_settings', { p_daily_target: next.dailyTarget, p_mode: next.mode })
+      supabase.rpc('update_my_settings', {
+        p_daily_target: next.dailyTarget,
+        p_mode: next.mode,
+        p_timed_mode: next.timedMode,
+      })
         .then(({ error }) => { if (error) console.error('Settings save failed:', error.message); });
     }, 500);
   }, [userId]);
