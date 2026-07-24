@@ -1,9 +1,11 @@
+import { useState, useRef, useLayoutEffect, type ReactNode } from 'react';
 import type { Deal, Seat, Suit, HandCards } from '../types';
 import type { GameState } from '../hooks/useGameState';
 import { HandDisplay } from './HandDisplay';
 import { TrickDisplay } from './TrickDisplay';
 import { BiddingTable } from './BiddingTable';
 import { ContractBox } from './ContractBox';
+import { SUIT_COLORS } from '../lib/suitColors';
 
 const SUITS: Suit[] = ['S', 'H', 'D', 'C'];
 
@@ -79,78 +81,200 @@ function buildKnownVoids(state: GameState): Partial<Record<Seat, Set<string>>> {
   return voids;
 }
 
+/**
+ * Skaluje diagram tak, żeby zawsze mieścił się w kontenerze — jeden układ krzyża
+ * dla telefonu i desktopu zamiast dwóch osobnych. Rozmiar treści mierzymy przed
+ * transformacją (`offsetWidth` nie widzi `scale`), więc pomiar nie zapętla się z
+ * ResizeObserverem. Skala nigdy nie przekracza 1: na dużym ekranie diagram ma
+ * swoje naturalne, projektowe rozmiary.
+ */
+function ScaledBoard({ children }: { children: ReactNode }) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    const content = contentRef.current;
+    if (!box || !content) return;
+
+    const measure = () => {
+      const cw = content.offsetWidth;
+      const ch = content.offsetHeight;
+      if (!cw || !ch) return;
+      const next = Math.min(box.clientWidth / cw, box.clientHeight / ch, 1);
+      if (next > 0) setScale(prev => (Math.abs(prev - next) < 0.005 ? prev : next));
+    };
+
+    const ro = new ResizeObserver(measure);
+    ro.observe(box);
+    ro.observe(content);
+    measure();
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <div className="absolute inset-0 overflow-hidden p-1.5 md:p-4 md:pt-16">
+      <div ref={boxRef} className="flex h-full w-full items-center justify-center">
+        <div
+          ref={contentRef}
+          className="flex-shrink-0 origin-center"
+          style={{ transform: `scale(${scale})` }}
+        >
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const SUIT_SYM: Record<string, string> = { S: '♠', H: '♥', D: '♦', C: '♣' };
+
+function ContractChip({ contract, declarer }: { contract: string; declarer: Seat }) {
+  const match = contract.match(/^(\d)(S|H|D|C|NT)$/);
+  return (
+    <span className="flex items-center gap-1 rounded-[7px] border border-brand-accent/50 bg-brand-soft px-2 py-1 text-[12px] font-display font-bold leading-none">
+      {match ? (
+        <span className="text-brand-text">
+          {match[1]}
+          {match[2] === 'NT'
+            ? 'BA'
+            : <span style={{ color: SUIT_COLORS.panel[match[2] as Suit] }}>{SUIT_SYM[match[2]]}</span>}
+        </span>
+      ) : (
+        <span className="text-brand-text">{contract}</span>
+      )}
+      <span className="text-brand-accent-soft">{declarer}</span>
+    </span>
+  );
+}
+
 interface Props {
   deal: Deal;
   state: GameState;
+  /** Licznik trybu na czas — na telefonie w pasku chipów, na desktopie nad filcem. */
+  timer?: ReactNode;
 }
 
-export function BridgeTable({ deal, state }: Props) {
+export function BridgeTable({ deal, state, timer }: Props) {
+  const [sheetOpen, setSheetOpen] = useState(false);
   const playedBySeat = buildPlayedBySeat(state);
   const knownVoids = buildKnownVoids(state);
   const exhaustedSuits = buildExhaustedSuits(state, playedBySeat);
 
+  const hand = (seat: Seat) => (
+    <HandDisplay
+      seat={seat}
+      hand={state.hands[seat]}
+      seatPlayed={playedBySeat[seat]}
+      knownVoids={knownVoids[seat]}
+      exhaustedSuits={exhaustedSuits}
+    />
+  );
+
   return (
-    // Mobile: vertical scrollable stack. Desktop (md+): felt with absolute-positioned elements.
-    <div className="relative h-full w-full bg-brand-felt rounded-xl border border-brand-line shadow-2xl overflow-x-hidden overflow-y-auto md:overflow-hidden flex flex-col md:block">
-      {/* Felt texture overlay (desktop only) */}
-      <div className="hidden md:block absolute inset-0"
-        style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,.07) 1px, transparent 1px)', backgroundSize: '18px 18px' }}
-      />
-
-      {/* Category + difficulty */}
-      <div className="md:absolute md:top-3 md:left-3 z-10 flex flex-row gap-1 items-center p-2 md:p-0 flex-shrink-0">
-        <span className="text-[10px] bg-brand-panel/80 text-brand-dim px-1.5 py-0.5 rounded border border-brand-line">
-          {deal.category}
+    <div className="flex h-full w-full min-h-0 flex-col">
+      {/* Mobile: pasek chipów zamiast paneli — kontrakt, lewy, licytacja na żądanie. */}
+      <div className="mb-1.5 flex flex-shrink-0 items-center gap-1.5 md:hidden">
+        <ContractChip contract={deal.contract} declarer={deal.declarer} />
+        <span className="rounded-[7px] border border-brand-line bg-brand-soft px-2 py-1 font-mono text-[12px] leading-none text-brand-text">
+          NS {state.trickScores.NS} <span className="text-brand-dim">·</span> EW {state.trickScores.EW}
         </span>
-        <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${
-          deal.difficulty === 'Easy' ? 'bg-emerald-900/60 text-emerald-400 border-emerald-700' :
-          deal.difficulty === 'Medium' ? 'bg-yellow-900/60 text-yellow-400 border-yellow-700' :
-          deal.difficulty === 'Hard' ? 'bg-red-900/60 text-red-400 border-red-700' :
-          'bg-violet-900/60 text-violet-400 border-violet-700'
-        }`}>
-          {deal.difficulty}
-        </span>
+        {timer}
+        <button
+          onClick={() => setSheetOpen(true)}
+          className="ml-auto flex h-9 items-center gap-1 rounded-[7px] border border-brand-line bg-brand-soft px-3 text-[12px] leading-none text-brand-accent-soft"
+        >
+          Licytacja
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
       </div>
 
-      {/* Bidding table */}
-      <div className="md:absolute md:top-3 md:right-3 z-10 w-full md:w-64 px-2 md:px-0 flex-shrink-0">
-        <BiddingTable bidding={deal.bidding} dealer={deal.dealer} bidAlerts={deal.bidAlerts} />
-      </div>
+      <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-brand-line bg-brand-felt shadow-2xl">
+        {/* Felt texture overlay */}
+        <div className="absolute inset-0"
+          style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,.07) 1px, transparent 1px)', backgroundSize: '18px 18px' }}
+        />
 
-      {/* Cross layout: N top, S bottom, W left, E right */}
-      <div className="md:absolute md:inset-0 flex flex-col items-center justify-center gap-2 p-2 md:pt-14 flex-shrink-0">
-
-        {/* North */}
-        <HandDisplay seat="N" hand={state.hands['N']} seatPlayed={playedBySeat['N']} knownVoids={knownVoids['N']} exhaustedSuits={exhaustedSuits} />
-
-        <div className="flex items-center gap-2">
-          {/* West */}
-          <HandDisplay seat="W" hand={state.hands['W']} seatPlayed={playedBySeat['W']} knownVoids={knownVoids['W']} exhaustedSuits={exhaustedSuits} />
-
-          {/* Center: trick area */}
-          <div className="bg-black/20 rounded-xl border border-brand-line w-24 h-24 md:w-32 md:h-32 flex items-center justify-center shadow-inner flex-shrink-0">
-            <TrickDisplay
-              visibleTrick={state.visibleTrick as Partial<Record<import('../types').Seat, string>>}
-              leader={state.currentTrickLeader as import('../types').Seat | null}
-            />
-          </div>
-
-          {/* East */}
-          <HandDisplay seat="E" hand={state.hands['E']} seatPlayed={playedBySeat['E']} knownVoids={knownVoids['E']} exhaustedSuits={exhaustedSuits} />
+        {/* Desktop: kategoria + trudność w rogu */}
+        <div className="absolute left-3 top-3 z-10 hidden items-center gap-1 md:flex">
+          <span className="rounded border border-brand-line bg-brand-panel/80 px-1.5 py-0.5 text-[10px] text-brand-dim">
+            {deal.category}
+          </span>
+          <span className={`rounded border px-1.5 py-0.5 text-[10px] font-medium ${
+            deal.difficulty === 'Easy' ? 'bg-emerald-900/60 text-emerald-400 border-emerald-700' :
+            deal.difficulty === 'Medium' ? 'bg-yellow-900/60 text-yellow-400 border-yellow-700' :
+            deal.difficulty === 'Hard' ? 'bg-red-900/60 text-red-400 border-red-700' :
+            'bg-violet-900/60 text-violet-400 border-violet-700'
+          }`}>
+            {deal.difficulty}
+          </span>
         </div>
 
-        {/* South */}
-        <HandDisplay seat="S" hand={state.hands['S']} seatPlayed={playedBySeat['S']} knownVoids={knownVoids['S']} exhaustedSuits={exhaustedSuits} />
-      </div>
+        {/* Desktop: licznik nad środkiem filcu */}
+        {timer && (
+          <div className="absolute left-1/2 top-2 z-10 hidden -translate-x-1/2 md:block">{timer}</div>
+        )}
 
-      {/* Contract box */}
-      <div className="md:absolute md:bottom-3 md:right-3 z-10 flex justify-center md:block p-2 md:p-0 flex-shrink-0">
-        <ContractBox
-          contract={deal.contract}
-          declarer={deal.declarer}
-          trickScores={state.trickScores}
-          vulnerability={deal.vulnerability}
-        />
+        {/* Desktop: licytacja i kontrakt na stałe w rogach */}
+        <div className="absolute right-3 top-3 z-10 hidden w-64 md:block">
+          <BiddingTable bidding={deal.bidding} dealer={deal.dealer} bidAlerts={deal.bidAlerts} />
+        </div>
+
+        <div className="absolute bottom-3 right-3 z-10 hidden md:block">
+          <ContractBox
+            contract={deal.contract}
+            declarer={deal.declarer}
+            trickScores={state.trickScores}
+            vulnerability={deal.vulnerability}
+          />
+        </div>
+
+        {/* Krzyż N/W/E/S — jeden układ, skalowany do dostępnego miejsca */}
+        <ScaledBoard>
+          <div className="flex flex-col items-center gap-1.5">
+            {hand('N')}
+            <div className="flex items-center gap-1.5">
+              {hand('W')}
+              <div className="flex h-[106px] w-[106px] flex-shrink-0 items-center justify-center rounded-xl border border-brand-line bg-black/20 shadow-inner">
+                <TrickDisplay
+                  visibleTrick={state.visibleTrick as Partial<Record<Seat, string>>}
+                  leader={state.currentTrickLeader as Seat | null}
+                />
+              </div>
+              {hand('E')}
+            </div>
+            {hand('S')}
+          </div>
+        </ScaledBoard>
+
+        {/* Mobile: arkusz z licytacją — otwierany z chipa, zasłania stół tylko na żądanie */}
+        {sheetOpen && (
+          <div className="absolute inset-0 z-20 flex flex-col justify-end md:hidden" onClick={() => setSheetOpen(false)}>
+            <div className="absolute inset-0 bg-black/50" />
+            <div
+              className="slide-up relative max-h-[80%] overflow-y-auto rounded-t-xl border-t border-brand-line bg-brand-panel p-3"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="mx-auto mb-3 h-1 w-8 rounded-full bg-white/20" />
+              <BiddingTable bidding={deal.bidding} dealer={deal.dealer} bidAlerts={deal.bidAlerts} />
+              <div className="mt-3 flex items-center justify-between border-t border-brand-line pt-3 text-[12px]">
+                <span className="text-brand-dim">{deal.category} · {deal.difficulty}</span>
+                <span className="text-brand-text">
+                  {deal.contract} {deal.declarer} · {deal.vulnerability}
+                </span>
+              </div>
+              <button
+                onClick={() => setSheetOpen(false)}
+                className="mt-3 w-full rounded-[9px] border border-brand-line bg-brand-soft py-2.5 text-[13px] text-brand-text"
+              >
+                Zamknij
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

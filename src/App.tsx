@@ -254,9 +254,13 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
           />
         ) : (
           <>
-            <div className="relative flex-1 p-3 min-h-0 flex flex-col">
-              <DealTimer remaining={timer.remaining} limit={timerLimit} visible={timer.visible} />
-              <BridgeTable deal={selectedDeal} state={state} />
+            {/* min-h: podłoga dla diagramu — rozwinięty opis nie zgniata go poniżej czytelności */}
+            <div className="relative flex-1 min-h-[240px] p-2 flex flex-col md:min-h-0 md:p-3">
+              <BridgeTable
+                deal={selectedDeal}
+                state={state}
+                timer={<DealTimer remaining={timer.remaining} limit={timerLimit} visible={timer.visible} />}
+              />
             </div>
 
             {!session.active && state.phase === 'rated' && selectedId && (

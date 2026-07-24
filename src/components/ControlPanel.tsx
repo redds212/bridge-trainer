@@ -16,33 +16,33 @@ export function ControlPanel({ phase, currentStep, totalSteps, isAnimating, onNe
   const canPrev = currentStep > 0 && !isAnimating && (phase === 'intro' || phase === 'decision');
   const canNext = !atDecision && !isAnimating;
 
+  // Kciukowy dok: na telefonie ikony 44 px + szerokie NEXT (jedyny przycisk
+  // wciskany kilkanaście razy pod rząd). Na desktopie wracają etykiety.
+  const secondary = 'flex h-11 items-center justify-center gap-1.5 rounded-[9px] border border-brand-line bg-brand-soft px-3 text-sm font-medium text-brand-dim transition-colors hover:bg-brand-line/60 hover:text-brand-text disabled:cursor-not-allowed disabled:opacity-30';
+
   return (
-    <div className="flex flex-wrap items-center justify-center gap-2 md:gap-3 py-3 px-2 flex-shrink-0">
-      <button
-        onClick={onRewind}
-        className="flex items-center gap-1.5 px-3 md:px-4 py-2 rounded-[9px] bg-brand-soft hover:bg-brand-line/60 text-brand-dim hover:text-brand-text text-sm font-medium transition-colors border border-brand-line"
-      >
+    <div
+      className="flex flex-shrink-0 items-center justify-center gap-2 px-2 pt-2 md:gap-3 md:pt-3"
+      style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
+    >
+      <button onClick={onRewind} aria-label="Restart" className={`${secondary} w-11 md:w-auto`}>
         <span>⏮</span>
-        <span>RESTART</span>
+        <span className="hidden md:inline">RESTART</span>
       </button>
 
-      <button
-        onClick={onPrev}
-        disabled={!canPrev}
-        className="flex items-center gap-1.5 px-3 md:px-4 py-2 rounded-[9px] bg-brand-soft hover:bg-brand-line/60 text-brand-dim hover:text-brand-text text-sm font-medium transition-colors border border-brand-line disabled:opacity-30 disabled:cursor-not-allowed"
-      >
+      <button onClick={onPrev} disabled={!canPrev} aria-label="Poprzedni" className={`${secondary} w-11 md:w-auto`}>
         <span>◀</span>
-        <span>POPRZEDNI</span>
+        <span className="hidden md:inline">POPRZEDNI</span>
       </button>
 
-      <div className="text-brand-dim text-xs font-mono w-10 md:w-16 text-center">
+      <div className="w-9 flex-shrink-0 text-center font-mono text-xs text-brand-dim md:w-16">
         {phase === 'intro' ? `${currentStep}/${totalSteps}` : atDecision ? '●' : ''}
       </div>
 
       <button
         onClick={onNext}
         disabled={!canNext}
-        className={`flex items-center gap-1.5 px-4 md:px-6 py-2 rounded-[9px] text-sm font-semibold transition-all border ${
+        className={`flex h-11 flex-1 items-center justify-center gap-1.5 rounded-[9px] border text-sm font-semibold transition-all md:h-auto md:flex-none md:px-6 md:py-2 ${
           canNext
             ? 'bg-brand-accent hover:bg-brand-accent-soft text-brand-btn-text border-brand-accent shadow-lg shadow-black/30'
             : 'bg-brand-soft text-brand-dim border-brand-line cursor-not-allowed opacity-30'

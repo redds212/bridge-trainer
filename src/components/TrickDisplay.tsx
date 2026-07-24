@@ -15,7 +15,7 @@ export function TrickDisplay({ visibleTrick, leader }: Props) {
   };
 
   return (
-    <div className="grid grid-cols-3 grid-rows-3 gap-0.5 w-28 h-28">
+    <div className="grid grid-cols-3 grid-rows-3 gap-px w-[98px] h-[98px]">
       {(['N', 'W', 'E', 'S'] as Seat[]).map(seat => {
         const card = visibleTrick[seat];
         return (
@@ -24,7 +24,7 @@ export function TrickDisplay({ visibleTrick, leader }: Props) {
               <PlayingCard code={card} animated />
             ) : (
               leader === seat ? (
-                <div className="w-10 h-14 rounded-lg border-2 border-dashed border-yellow-400/60 flex items-center justify-center">
+                <div className="w-8 h-11 rounded-md border-2 border-dashed border-yellow-400/60 flex items-center justify-center">
                   <span className="text-yellow-400/60 text-xs">?</span>
                 </div>
               ) : null

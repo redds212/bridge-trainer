@@ -33,9 +33,9 @@ export function PlayingCard({ code, small = false, animated = false }: Props) {
   }
 
   return (
-    <div className={`bg-white rounded-lg shadow-md border border-slate-200 flex flex-col items-center justify-center w-10 h-14 select-none ${animated ? 'deal-card' : ''}`}>
-      <span className="text-sm font-bold leading-none" style={{ color }}>{displayRank}</span>
-      <span className="text-base" style={{ color }}>{SUIT_SYMBOLS[suit as Suit]}</span>
+    <div className={`bg-white rounded-md shadow-md border border-slate-200 flex flex-col items-center justify-center w-8 h-11 select-none ${animated ? 'deal-card' : ''}`}>
+      <span className="text-[13px] font-bold leading-none" style={{ color }}>{displayRank}</span>
+      <span className="text-sm leading-none mt-0.5" style={{ color }}>{SUIT_SYMBOLS[suit as Suit]}</span>
     </div>
   );
 }

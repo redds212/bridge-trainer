@@ -55,21 +55,21 @@ export function HandDisplay({ seat, hand, seatPlayed = [], knownVoids, exhausted
     }
 
     return (
-      <div className="flex flex-col items-center gap-1">
-        <div className="text-brand-dim text-xs font-semibold uppercase tracking-wider">{SEAT_SHORT[seat]}</div>
-        <div className="bg-brand-panel rounded-[11px] border border-brand-line px-[13px] py-[11px] flex flex-col gap-1 min-w-[105px]">
+      <div className="flex flex-col items-center gap-0.5">
+        <div className="text-brand-dim text-[10px] font-semibold uppercase tracking-wider leading-none">{SEAT_SHORT[seat]}</div>
+        <div className="bg-brand-panel rounded-[10px] border border-brand-line px-2.5 py-1.5 flex flex-col gap-0.5 min-w-[86px]">
           {SUIT_ORDER.map(suit => {
             const played = sortedHighToLow(playedBySuit[suit] ?? []);
             const remaining = (knownVoids?.has(suit) || exhaustedSuits?.has(suit)) ? 0 : Math.max(0, HIDDEN_COUNT - played.length);
             return (
-              <div key={suit} className="flex items-center gap-1 min-h-[1.4rem]">
-                <span className="text-sm w-4 flex-shrink-0" style={{ color: SUIT_COLORS.panel[suit] }}>{SUIT_SYMBOLS[suit]}</span>
-                <div className="flex items-baseline gap-1 font-mono whitespace-nowrap">
+              <div key={suit} className="flex items-center gap-1 min-h-[18px]">
+                <span className="text-[13px] w-3.5 flex-shrink-0 leading-none" style={{ color: SUIT_COLORS.panel[suit] }}>{SUIT_SYMBOLS[suit]}</span>
+                <div className="flex items-baseline gap-[3px] font-mono whitespace-nowrap">
                   {played.map((rank, i) => (
-                    <span key={i} className="text-sm text-brand-text/70">{rank}</span>
+                    <span key={i} className="text-[13px] text-brand-text/70">{rank}</span>
                   ))}
                   {Array.from({ length: remaining }, (_, i) => (
-                    <span key={`q${i}`} className="text-sm text-[rgba(255,255,255,.35)]">?</span>
+                    <span key={`q${i}`} className="text-[13px] text-[rgba(255,255,255,.35)]">?</span>
                   ))}
                 </div>
               </div>
@@ -83,27 +83,27 @@ export function HandDisplay({ seat, hand, seatPlayed = [], knownVoids, exhausted
   const cards = hand as HandCards;
 
   return (
-    <div className="flex flex-col items-center gap-1">
-      <div className="text-brand-dim text-xs font-semibold uppercase tracking-wider">{SEAT_SHORT[seat]}</div>
-      <div className="bg-brand-panel rounded-[11px] border border-brand-line px-[13px] py-[11px] flex flex-col gap-1 min-w-[105px] fade-in">
+    <div className="flex flex-col items-center gap-0.5">
+      <div className="text-brand-dim text-[10px] font-semibold uppercase tracking-wider leading-none">{SEAT_SHORT[seat]}</div>
+      <div className="bg-brand-panel rounded-[10px] border border-brand-line px-2.5 py-1.5 flex flex-col gap-0.5 min-w-[86px] fade-in">
         {SUIT_ORDER.map(suit => {
           const rankStr = cards[suit] ?? '';
           const ranks = parseCards(rankStr);
           return (
-            <div key={suit} className="flex items-center gap-1 min-h-[1.4rem]">
-              <span className="text-sm w-4 flex-shrink-0" style={{ color: SUIT_COLORS.panel[suit] }}>{SUIT_SYMBOLS[suit]}</span>
-              <div className="flex items-baseline gap-1 font-mono whitespace-nowrap">
+            <div key={suit} className="flex items-center gap-1 min-h-[18px]">
+              <span className="text-[13px] w-3.5 flex-shrink-0 leading-none" style={{ color: SUIT_COLORS.panel[suit] }}>{SUIT_SYMBOLS[suit]}</span>
+              <div className="flex items-baseline gap-[3px] font-mono whitespace-nowrap">
                 {ranks.length ? ranks.map((rank, i) => {
                   const played = playedSet.has(`${suit}${rank}`);
                   return (
                     <span
                       key={i}
-                      className={`text-sm transition-colors ${played ? 'text-brand-text/25' : 'text-brand-text'}`}
+                      className={`text-[13px] transition-colors ${played ? 'text-brand-text/25' : 'text-brand-text'}`}
                     >
                       {rank}
                     </span>
                   );
-                }) : <span className="text-sm text-brand-dim">—</span>}
+                }) : <span className="text-[13px] text-brand-dim">—</span>}
               </div>
             </div>
           );

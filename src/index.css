@@ -11,12 +11,17 @@ body {
   font-family: 'Manrope', system-ui, -apple-system, sans-serif;
   background: #0b1220;
   color: #e8edf5;
-  height: 100vh;
+  /* dvh, nie vh — pasek adresu mobilnej przeglądarki nie ucina dolnego doku */
+  height: 100dvh;
   overflow: hidden;
+  /* bez gumowego przewijania i podwójnego tapnięcia = zoom */
+  overscroll-behavior: none;
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
 }
 
 #root {
-  height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
 }
