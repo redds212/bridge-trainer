@@ -3,14 +3,37 @@ import type { Deal, Difficulty } from '../types';
 import type { DealRow } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
+import { dealSignature } from '../lib/dealSignature';
 
 export interface DealRecord extends Deal {
   isBase: boolean;
   archived: boolean;
   createdAt: string;
+  /** Sygnatura zapisana w bazie; NULL dla wierszy sprzed backfillu lub niekompletnych. */
+  cardSignature: string | null;
 }
 
 interface OpResult { error?: string }
+
+export interface BulkAddResult {
+  ok: number;
+  failures: { title: string; error: string }[];
+}
+
+export interface BackfillResult {
+  /** Wiersze, którym dopisano sygnaturę. */
+  updated: number;
+  /** Wiersze bez kompletu 52 kart — trwale zwolnione z kontroli duplikatów. */
+  exempt: number;
+  error?: string;
+}
+
+/** Czytelny komunikat zamiast surowego naruszenia unikalnego indeksu z Postgresa. */
+function friendlyError(message: string): string {
+  return message.includes('deals_card_signature_key')
+    ? 'rozdanie o tym rozkładzie kart już istnieje w bazie'
+    : message;
+}
 
 function rowToRecord(r: DealRow, tagIds: string[]): DealRecord {
   return {
@@ -34,10 +57,16 @@ function rowToRecord(r: DealRow, tagIds: string[]): DealRecord {
     sourceDetails: r.source_details ?? '',
     tagIds,
     bidAlerts: r.bid_alerts ?? [],
+    cardSignature: r.card_signature ?? null,
   };
 }
 
-/** Column payload (snake_case) shared by insert/update. */
+/**
+ * Column payload (snake_case) shared by insert/update.
+ * Celowo BEZ `card_signature` — sygnaturę dopisuje tylko ścieżka insertu, żeby
+ * edycja rozdania (np. poprawka błędnie wydrukowanej karty) nie zmieniła jego
+ * tożsamości. Patrz docs/DEDUP_PLAN.md.
+ */
 function dealColumns(d: Deal) {
   return {
     title: d.title,
@@ -104,17 +133,95 @@ export function useDeals() {
     const id = `deal-${crypto.randomUUID()}`;
     const { error } = await supabase
       .from('deals')
-      .insert({ id, ...dealColumns(deal), is_base: false, archived: false, created_by: user?.id ?? null });
-    if (error) return { error: error.message };
+      .insert({
+        id,
+        ...dealColumns(deal),
+        card_signature: dealSignature(deal),
+        is_base: false,
+        archived: false,
+        created_by: user?.id ?? null,
+      });
+    if (error) return { error: friendlyError(error.message) };
     const tagErr = await syncDealTags(id, deal.tagIds);
     if (tagErr) return { error: tagErr };
     await reload();
     return {};
   }, [user?.id, reload]);
 
+  /**
+   * Wsadowy import. Jeden `insert` na porcję zamiast jednego wywołania (i jednego
+   * przeładowania listy) na rozdanie — przy 150 planszach to różnica między
+   * kilkoma sekundami a kilkoma minutami.
+   *
+   * Porcja odrzucona przez bazę jest ponawiana wiersz po wierszu, żeby wskazać
+   * winowajcę zamiast wywalić cały wsad. Motywów nie synchronizujemy: eksport
+   * usuwa `tagIds`/`sourceId` jako lokalne dla bazy, więc import ich nie niesie.
+   */
+  const addDeals = useCallback(async (deals: Deal[]): Promise<BulkAddResult> => {
+    const rows = deals.map(d => ({
+      id: `deal-${crypto.randomUUID()}`,
+      ...dealColumns(d),
+      card_signature: dealSignature(d),
+      is_base: false,
+      archived: false,
+      created_by: user?.id ?? null,
+    }));
+
+    let ok = 0;
+    const failures: BulkAddResult['failures'] = [];
+    const CHUNK = 50;
+
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      const chunk = rows.slice(i, i + CHUNK);
+      const { error } = await supabase.from('deals').insert(chunk);
+      if (!error) { ok += chunk.length; continue; }
+
+      for (let j = 0; j < chunk.length; j++) {
+        const { error: rowErr } = await supabase.from('deals').insert(chunk[j]);
+        if (rowErr) failures.push({ title: deals[i + j].title, error: friendlyError(rowErr.message) });
+        else ok++;
+      }
+    }
+
+    await reload();
+    return { ok, failures };
+  }, [user?.id, reload]);
+
+  /**
+   * Jednorazowy backfill: dopisuje sygnatury wierszom sprzed wprowadzenia kolumny.
+   * Musi się wykonać PRZED założeniem unikalnego indeksu (0007) — bez tego rozdania
+   * już zaimportowane zostają z NULL, są zwolnione z indeksu i można je zaimportować
+   * po raz drugi.
+   */
+  const backfillSignatures = useCallback(async (): Promise<BackfillResult> => {
+    const pending = records.filter(r => r.cardSignature === null);
+    const signable = pending
+      .map(r => ({ id: r.id, sig: dealSignature(r) }))
+      .filter((x): x is { id: string; sig: string } => x.sig !== null);
+
+    let updated = 0;
+    const CHUNK = 10;
+    for (let i = 0; i < signable.length; i += CHUNK) {
+      const results = await Promise.all(
+        signable.slice(i, i + CHUNK).map(x =>
+          supabase.from('deals').update({ card_signature: x.sig }).eq('id', x.id),
+        ),
+      );
+      const failed = results.find(r => r.error);
+      if (failed?.error) {
+        await reload();
+        return { updated, exempt: pending.length - signable.length, error: friendlyError(failed.error.message) };
+      }
+      updated += results.length;
+    }
+
+    await reload();
+    return { updated, exempt: pending.length - signable.length };
+  }, [records, reload]);
+
   const updateDeal = useCallback(async (id: string, deal: Deal): Promise<OpResult> => {
     const { error } = await supabase.from('deals').update(dealColumns(deal)).eq('id', id);
-    if (error) return { error: error.message };
+    if (error) return { error: friendlyError(error.message) };
     const tagErr = await syncDealTags(id, deal.tagIds);
     if (tagErr) return { error: tagErr };
     await reload();
@@ -149,6 +256,8 @@ export function useDeals() {
     error,
     reload,
     addDeal,
+    addDeals,
+    backfillSignatures,
     updateDeal,
     archiveDeal,
     restoreDeal,

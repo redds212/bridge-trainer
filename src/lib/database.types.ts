@@ -25,6 +25,8 @@ export type DealRow = {
   source_id: string | null;
   source_details: string | null;
   bid_alerts: BidAlert[] | null;
+  /** Tożsamość rozkładu 52 kart; NULL gdy rozdanie niekompletne. Patrz 0006_deal_signature.sql. */
+  card_signature: string | null;
 };
 
 export type TagRow = {
@@ -86,7 +88,7 @@ export interface Database {
     Tables: {
       deals: {
         Row: DealRow;
-        Insert: Insert<DealRow, 'is_base' | 'archived' | 'created_by' | 'created_at' | 'source_id' | 'source_details' | 'bid_alerts'>;
+        Insert: Insert<DealRow, 'is_base' | 'archived' | 'created_by' | 'created_at' | 'source_id' | 'source_details' | 'bid_alerts' | 'card_signature'>;
         Update: Partial<DealRow>;
         Relationships: [];
       };

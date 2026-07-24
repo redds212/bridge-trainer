@@ -1,9 +1,10 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import type { Deal } from '../types';
-import type { DealRecord } from '../hooks/useDeals';
+import type { DealRecord, BulkAddResult, BackfillResult } from '../hooks/useDeals';
 import { DealBuilder } from './DealBuilder';
 import { UsersAdmin } from './UsersAdmin';
 import { validateDeal } from '../lib/validateDeal';
+import { dealSignature, normalizeTitle } from '../lib/dealSignature';
 
 type Tab = 'deals' | 'users';
 
@@ -18,11 +19,36 @@ interface Props {
   loading: boolean;
   error: string | null;
   onAdd: (deal: Deal) => Promise<OpResult>;
+  onAddMany: (deals: Deal[]) => Promise<BulkAddResult>;
+  onBackfill: () => Promise<BackfillResult>;
   onUpdate: (id: string, deal: Deal) => Promise<OpResult>;
   onArchive: (id: string) => Promise<OpResult>;
   onRestore: (id: string) => Promise<OpResult>;
   onDelete: (id: string) => Promise<OpResult>;
   onBack: () => void;
+}
+
+/** Wynik przejrzenia wybranych plików — liczony PRZED jakimkolwiek zapisem. */
+interface ImportScan {
+  fileCount: number;
+  total: number;
+  /** Gotowe do zapisu. */
+  fresh: Deal[];
+  /** Tytuł już w bazie, ale inny rozkład kart — wymaga decyzji użytkownika. */
+  renamed: { deal: Deal; existing: string }[];
+  /** Ten sam rozkład 52 kart — pomijane bezwarunkowo. */
+  duplicates: { title: string; against: string; inBatch: boolean }[];
+  invalid: { title: string; reason: string }[];
+  /** Bez kompletu 52 kart → poza kontrolą duplikatów. */
+  unsigned: number;
+  badFiles: string[];
+}
+
+interface ImportReport {
+  scan: ImportScan;
+  added: number;
+  renamedIncluded: boolean;
+  failures: { title: string; error: string }[];
 }
 
 const DIFF_COLOR: Record<string, string> = {
@@ -34,17 +60,17 @@ const DIFF_COLOR: Record<string, string> = {
 
 /** Editable Deal for the builder (keeps motifs/source so edit preserves them). */
 function toDeal(r: DealRecord): Deal {
-  const { isBase: _i, archived: _a, ...deal } = r;
+  const { isBase: _i, archived: _a, cardSignature: _c, ...deal } = r;
   return deal;
 }
 
-/** Portable Deal for JSON export — drops DB-local refs (tag/source uuids). */
+/** Portable Deal for JSON export — drops DB-local refs (tag/source uuids, signature). */
 function toExportDeal(r: DealRecord): Deal {
-  const { isBase: _i, archived: _a, tagIds: _t, sourceId: _s, sourceDetails: _d, ...deal } = r;
+  const { isBase: _i, archived: _a, tagIds: _t, sourceId: _s, sourceDetails: _d, cardSignature: _c, ...deal } = r;
   return deal;
 }
 
-export function AdminPanel({ allDeals, loading, error, onAdd, onUpdate, onArchive, onRestore, onDelete, onBack }: Props) {
+export function AdminPanel({ allDeals, loading, error, onAdd, onAddMany, onBackfill, onUpdate, onArchive, onRestore, onDelete, onBack }: Props) {
   const [tab, setTab] = useState<Tab>('deals');
   const [builder, setBuilder] = useState<BuilderMode | null>(null);
   const [flash, setFlash] = useState('');
@@ -52,6 +78,8 @@ export function AdminPanel({ allDeals, loading, error, onAdd, onUpdate, onArchiv
   const [showArchived, setShowArchived] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [importScan, setImportScan] = useState<ImportScan | null>(null);
+  const [importReport, setImportReport] = useState<ImportReport | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
 
   const showFlash = (msg: string) => { setFlash(msg); setTimeout(() => setFlash(''), 4000); };
@@ -83,33 +111,117 @@ export function AdminPanel({ allDeals, loading, error, onAdd, onUpdate, onArchiv
     URL.revokeObjectURL(url);
   };
 
-  const importDeals = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = '';
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      try {
-        const parsed = JSON.parse(ev.target?.result as string);
-        const deals: Deal[] = Array.isArray(parsed) ? parsed : [parsed];
-        if (!deals.every(d => d.id && d.title)) throw new Error('nieprawidłowy format');
-        setBusy(true);
-        let ok = 0; let skipped = 0; const reasons: string[] = [];
-        for (const d of deals) {
-          const v = validateDeal(d);
-          if (v.errors.length) { skipped++; reasons.push(`„${d.title}": ${v.errors[0]}`); continue; }
-          const res = await onAdd(d);
-          if (res.error) { skipped++; reasons.push(`„${d.title}": ${res.error}`); } else ok++;
-        }
-        setBusy(false);
-        if (skipped) showErr(`Zaimportowano ${ok}, pominięto ${skipped} z błędami (np. ${reasons[0]}).`);
-        else showFlash(`Zaimportowano ${ok} rozdań.`);
-      } catch (err) {
-        setBusy(false);
-        showErr(`Błąd importu: ${err instanceof Error ? err.message : 'nieprawidłowy plik'}`);
+  /**
+   * Stan bazy widziany przez kontrolę duplikatów.
+   * Dla wierszy sprzed migracji (`cardSignature === null`) liczymy sygnaturę z ich
+   * bieżących kart — to dokładnie to, co dopisze backfill, więc kontrola działa
+   * także przed jego uruchomieniem.
+   */
+  const audit = useMemo(() => {
+    const bySig = new Map<string, string>();
+    const byTitle = new Map<string, string>();
+    const groups = new Map<string, string[]>();
+    let signed = 0, pending = 0, exempt = 0;
+
+    for (const r of allDeals) {
+      const sig = r.cardSignature ?? dealSignature(r);
+      if (r.cardSignature) signed++;
+      else if (sig) pending++;
+      else exempt++;
+
+      if (sig) {
+        if (!bySig.has(sig)) bySig.set(sig, r.title);
+        groups.set(sig, [...(groups.get(sig) ?? []), r.title]);
       }
+      const nt = normalizeTitle(r.title);
+      if (!byTitle.has(nt)) byTitle.set(nt, r.title);
+    }
+
+    return {
+      bySig, byTitle, signed, pending, exempt,
+      total: allDeals.length,
+      dupGroups: [...groups.values()].filter(g => g.length > 1),
     };
-    reader.readAsText(file);
+  }, [allDeals]);
+
+  /** Przegląda pliki bez zapisywania czegokolwiek — w jednym wspólnym przebiegu. */
+  const scanFiles = async (files: File[]): Promise<ImportScan> => {
+    const scan: ImportScan = {
+      fileCount: files.length, total: 0,
+      fresh: [], renamed: [], duplicates: [], invalid: [], unsigned: 0, badFiles: [],
+    };
+    // Kopie map: rozdania z tego wsadu rezerwują swoje sygnatury i tytuły, więc
+    // powtórka wewnątrz wsadu (np. euvc.json po plikach pojedynczych) też się złapie.
+    const bySig = new Map(audit.bySig);
+    const byTitle = new Map(audit.byTitle);
+    const batchSigs = new Set<string>();
+
+    const ordered = [...files].sort((a, b) => a.name.localeCompare(b.name, 'pl', { numeric: true }));
+    for (const file of ordered) {
+      let deals: Deal[];
+      try {
+        const parsed = JSON.parse(await file.text());
+        deals = (Array.isArray(parsed) ? parsed : [parsed]) as Deal[];
+        if (!deals.every(d => d && d.id && d.title)) throw new Error('nieprawidłowy format');
+      } catch (err) {
+        scan.badFiles.push(`${file.name}: ${err instanceof Error ? err.message : 'nieprawidłowy JSON'}`);
+        continue;
+      }
+
+      for (const d of deals) {
+        scan.total++;
+
+        const v = validateDeal(d);
+        if (v.errors.length) { scan.invalid.push({ title: d.title, reason: v.errors[0] }); continue; }
+
+        const sig = dealSignature(d);
+        if (sig) {
+          const hit = bySig.get(sig);
+          if (hit) { scan.duplicates.push({ title: d.title, against: hit, inBatch: batchSigs.has(sig) }); continue; }
+          bySig.set(sig, d.title);
+          batchSigs.add(sig);
+        } else {
+          scan.unsigned++;
+        }
+
+        const nt = normalizeTitle(d.title);
+        const titleHit = byTitle.get(nt);
+        if (titleHit) scan.renamed.push({ deal: d, existing: titleHit });
+        else scan.fresh.push(d);
+        byTitle.set(nt, d.title);
+      }
+    }
+    return scan;
+  };
+
+  const runImport = async (scan: ImportScan, includeRenamed: boolean) => {
+    setImportScan(null);
+    const deals = includeRenamed ? [...scan.fresh, ...scan.renamed.map(r => r.deal)] : scan.fresh;
+    setBusy(true);
+    const res = deals.length ? await onAddMany(deals) : { ok: 0, failures: [] };
+    setBusy(false);
+    setImportReport({ scan, added: res.ok, renamedIncluded: includeRenamed, failures: res.failures });
+  };
+
+  const importDeals = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (!files.length) return;
+    setImportReport(null);
+    setBusy(true);
+    const scan = await scanFiles(files);
+    setBusy(false);
+    // Kolizja tytułu nie blokuje, ale wymaga decyzji — patrz docs/DEDUP_PLAN.md.
+    if (scan.renamed.length) setImportScan(scan);
+    else await runImport(scan, false);
+  };
+
+  const runBackfill = async () => {
+    setBusy(true);
+    const res = await onBackfill();
+    setBusy(false);
+    if (res.error) showErr('Błąd przeliczania sygnatur: ' + res.error);
+    else showFlash(`Uzupełniono sygnatury: ${res.updated}. Zwolnionych (mniej niż 52 karty): ${res.exempt}.`);
   };
 
   if (builder) {
@@ -190,8 +302,158 @@ export function AdminPanel({ allDeals, loading, error, onAdd, onUpdate, onArchiv
           >
             Importuj JSON
           </button>
-          <input ref={importRef} type="file" accept=".json" className="hidden" onChange={importDeals} />
+          <input ref={importRef} type="file" accept=".json" multiple className="hidden" onChange={importDeals} />
+          <span className="text-slate-500 text-xs">Możesz zaznaczyć wiele plików naraz.</span>
         </div>
+
+        {/* Kolizja tytułów — ten sam board, inny rozkład kart. Decyzja użytkownika. */}
+        {importScan && (
+          <div className="bg-amber-900/30 border border-amber-700 rounded-xl p-4 space-y-3">
+            <div className="text-amber-200 text-sm font-semibold">
+              {importScan.renamed.length} {importScan.renamed.length === 1 ? 'rozdanie ma' : 'rozdań ma'} tytuł już obecny w bazie, ale INNY rozkład kart.
+            </div>
+            <p className="text-amber-200/70 text-xs">
+              Zwykle znaczy to, że plik został poprawiony (albo kartę poprawiono wcześniej w aplikacji).
+              Import doda je jako osobne rozdania — nic nie zostanie nadpisane.
+            </p>
+            <ul className="text-xs text-amber-100/80 max-h-40 overflow-y-auto space-y-0.5 font-mono">
+              {importScan.renamed.map((r, i) => <li key={i}>„{r.deal.title}" ↔ „{r.existing}"</li>)}
+            </ul>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <button
+                onClick={() => runImport(importScan, true)}
+                disabled={busy}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
+              >
+                Importuj wszystko ({importScan.fresh.length + importScan.renamed.length})
+              </button>
+              <button
+                onClick={() => runImport(importScan, false)}
+                disabled={busy}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-medium rounded-lg border border-slate-600 transition-colors disabled:opacity-50"
+              >
+                Pomiń te ({importScan.renamed.length}), importuj resztę ({importScan.fresh.length})
+              </button>
+              <button
+                onClick={() => setImportScan(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs rounded-lg border border-slate-700 transition-colors"
+              >
+                Anuluj
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Raport importu — duplikaty liczone osobno od błędów walidacji. */}
+        {importReport && (() => {
+          const { scan, added, renamedIncluded, failures } = importReport;
+          const skippedRenamed = renamedIncluded ? 0 : scan.renamed.length;
+          const item = 'text-xs font-mono text-slate-300 py-0.5';
+          return (
+            <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-2">
+              <div className="flex items-start justify-between gap-4">
+                <div className="text-sm text-white">
+                  Zaimportowano <span className="text-emerald-400 font-semibold">{added}</span>
+                  {' · '}pominięto <span className="text-amber-400 font-semibold">{scan.duplicates.length}</span> duplikatów
+                  {skippedRenamed > 0 && <> · pominięto {skippedRenamed} z kolizją tytułu</>}
+                  {scan.invalid.length > 0 && <> · <span className="text-red-400 font-semibold">{scan.invalid.length}</span> z błędami</>}
+                  {failures.length > 0 && <> · <span className="text-red-400 font-semibold">{failures.length}</span> odrzuconych przez bazę</>}
+                  <div className="text-slate-500 text-xs mt-0.5">
+                    {scan.total} rozdań z {scan.fileCount} {scan.fileCount === 1 ? 'pliku' : 'plików'}
+                    {scan.unsigned > 0 && ` · ${scan.unsigned} bez kompletu 52 kart (poza kontrolą duplikatów)`}
+                  </div>
+                </div>
+                <button onClick={() => setImportReport(null)} className="text-slate-500 hover:text-slate-300 text-xs">✕</button>
+              </div>
+
+              {scan.duplicates.length > 0 && (
+                <details className="group">
+                  <summary className="text-amber-400 text-xs cursor-pointer hover:text-amber-300">
+                    Duplikaty ({scan.duplicates.length}) — ten sam rozkład 52 kart
+                  </summary>
+                  <ul className="mt-1 max-h-56 overflow-y-auto pl-3 border-l border-slate-700">
+                    {scan.duplicates.map((d, i) => (
+                      <li key={i} className={item}>
+                        „{d.title}" → „{d.against}"
+                        <span className="text-slate-500"> ({d.inBatch ? 'w tym wsadzie' : 'w bazie'})</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+
+              {scan.invalid.length > 0 && (
+                <details>
+                  <summary className="text-red-400 text-xs cursor-pointer hover:text-red-300">
+                    Błędy walidacji ({scan.invalid.length})
+                  </summary>
+                  <ul className="mt-1 max-h-56 overflow-y-auto pl-3 border-l border-slate-700">
+                    {scan.invalid.map((d, i) => <li key={i} className={item}>„{d.title}": {d.reason}</li>)}
+                  </ul>
+                </details>
+              )}
+
+              {failures.length > 0 && (
+                <details open>
+                  <summary className="text-red-400 text-xs cursor-pointer hover:text-red-300">
+                    Odrzucone przez bazę ({failures.length})
+                  </summary>
+                  <ul className="mt-1 max-h-56 overflow-y-auto pl-3 border-l border-slate-700">
+                    {failures.map((f, i) => <li key={i} className={item}>„{f.title}": {f.error}</li>)}
+                  </ul>
+                </details>
+              )}
+
+              {scan.badFiles.length > 0 && (
+                <details open>
+                  <summary className="text-red-400 text-xs cursor-pointer hover:text-red-300">
+                    Nieczytelne pliki ({scan.badFiles.length})
+                  </summary>
+                  <ul className="mt-1 pl-3 border-l border-slate-700">
+                    {scan.badFiles.map((f, i) => <li key={i} className={item}>{f}</li>)}
+                  </ul>
+                </details>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Konserwacja sygnatur — widoczne tylko dopóki jest co zrobić. */}
+        {(audit.pending > 0 || audit.dupGroups.length > 0) && (
+          <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-2">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-slate-300 text-xs">
+                Sygnatury rozkładu: <span className="text-white">{audit.signed}/{audit.total}</span> podpisanych
+                {audit.pending > 0 && <> · <span className="text-amber-400">{audit.pending}</span> do uzupełnienia</>}
+                {audit.exempt > 0 && <> · {audit.exempt} bez kompletu 52 kart (zwolnione)</>}
+              </span>
+              {audit.pending > 0 && (
+                <button
+                  onClick={runBackfill}
+                  disabled={busy}
+                  className="px-4 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-medium rounded-lg border border-slate-600 transition-colors disabled:opacity-50"
+                >
+                  Przelicz sygnatury
+                </button>
+              )}
+            </div>
+            {audit.dupGroups.length > 0 && (
+              <details open>
+                <summary className="text-red-400 text-xs cursor-pointer hover:text-red-300">
+                  Duplikaty już w bazie: {audit.dupGroups.length} {audit.dupGroups.length === 1 ? 'grupa' : 'grup'} — usuń nadmiarowe przed migracją 0007
+                </summary>
+                <ul className="mt-1 max-h-56 overflow-y-auto pl-3 border-l border-slate-700">
+                  {audit.dupGroups.map((g, i) => (
+                    <li key={i} className="text-xs font-mono text-slate-300 py-0.5">{g.map(t => `„${t}"`).join(' = ')}</li>
+                  ))}
+                </ul>
+                <p className="text-slate-500 text-[11px] mt-1">
+                  Usunięcie rozdania kasuje też historię powtórek (SRS) z nim związaną — zostaw tę kopię, która ma postępy.
+                </p>
+              </details>
+            )}
+          </div>
+        )}
 
         <div>
           <div className="flex items-center justify-between mb-3">

@@ -61,6 +61,8 @@ function AppShell() {
         loading={dealsHook.loading}
         error={dealsHook.error}
         onAdd={dealsHook.addDeal}
+        onAddMany={dealsHook.addDeals}
+        onBackfill={dealsHook.backfillSignatures}
         onUpdate={dealsHook.updateDeal}
         onArchive={dealsHook.archiveDeal}
         onRestore={dealsHook.restoreDeal}

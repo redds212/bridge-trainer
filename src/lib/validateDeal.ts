@@ -1,49 +1,13 @@
-import type { Deal, Seat, HandCards, HandData, TrickStep } from '../types';
+import type { Deal, Seat, TrickStep } from '../types';
+import { SEATS, seatCards } from './cards';
 
 export interface DealValidation {
   errors: string[];   // block save / import
   warnings: string[]; // advisory
 }
 
-const SEATS: Seat[] = ['N', 'E', 'S', 'W'];
 const CLOCKWISE: Seat[] = ['N', 'E', 'S', 'W'];
 const SUIT_SYM: Record<string, string> = { S: '♠', H: '♥', D: '♦', C: '♣' };
-
-function parseRanks(s: string | undefined): string[] {
-  if (!s) return [];
-  const low = s.toLowerCase();
-  if (low === 'void' || s === '-') return [];
-  const out: string[] = [];
-  let i = 0;
-  while (i < s.length) {
-    if (s[i] === ' ') { i++; continue; }
-    if (s[i] === '1' && s[i + 1] === '0') { out.push('10'); i += 2; }
-    else { out.push(s[i]); i++; }
-  }
-  return out;
-}
-
-function handToCodes(h: HandCards): string[] {
-  return (['S', 'H', 'D', 'C'] as const).flatMap(suit => parseRanks(h[suit]).map(r => `${suit}${r}`));
-}
-
-function isHidden(h: HandData): h is { hidden: true } {
-  return !!h && (h as { hidden?: boolean }).hidden === true;
-}
-
-/** The cards known to belong to a seat (visible hand, or a hidden hand's reveal). */
-function seatCards(deal: Deal, seat: Seat): { codes: string[]; complete: boolean } | null {
-  const h = deal.initialHands?.[seat];
-  if (!h) return null;
-  if (isHidden(h)) {
-    const rev = deal.solution?.revealAllCards?.[seat];
-    if (!rev) return null; // hidden and not revealed → unknown
-    const codes = handToCodes(rev);
-    return { codes, complete: codes.length === 13 };
-  }
-  const codes = handToCodes(h as HandCards);
-  return { codes, complete: codes.length === 13 };
-}
 
 function pretty(code: string): string {
   return `${SUIT_SYM[code[0]] ?? code[0]}${code.slice(1)}`;
