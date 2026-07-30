@@ -77,7 +77,11 @@ Stan na: 2026-06-25.
 - Ewentualnie: Mój panel / Admin (ikony), RESTART/POPRZEDNI/NEXT w [src/components/ControlPanel.tsx](src/components/ControlPanel.tsx) (część ma już strzałki ⏮ ◀ ▶ jako tekst — można ujednolicić na prawdziwe ikony).
 
 **Jak technicznie:**
-- W projekcie jest już sprite SVG: [public/icons.svg](public/icons.svg) — sprawdzić, jakie ikony zawiera; ewentualnie dodać brakujące (logout, flag).
+- ⚠️ Sprostowanie do pierwotnej notatki (2026-07-30): `public/icons.svg` **nie był** spritem
+  projektu — zawierał ikony Bluesky, Discorda, GitHuba i X, czyli pozostałość po szablonie
+  Vite. Razem z równie nieużywanym `public/favicon.svg` (fioletowy znaczek bez związku
+  z BridgeLoop) został usunięty; oba lądowały w precache service workera. Sprite trzeba
+  więc zrobić od zera.
 - Wzorzec komponentu ikony: jak [src/components/SuitIcon.tsx](src/components/SuitIcon.tsx). Można zrobić mały komponent `<Icon name="logout" />` używający `<use href="/icons.svg#logout">`.
 - Kolory z tokenów brand (`--brand-dim`, hover `--brand-text`), spójnie z resztą.
 
