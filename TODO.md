@@ -174,6 +174,83 @@ czego trenować. Pełny offline = cache rozdań w IndexedDB + kolejka ocen synch
 po powrocie sieci. Do przemyślenia przed kodowaniem: co przy konflikcie zapisu z dwóch
 urządzeń i czy sesja dzienna ma się dać rozpocząć offline.
 
+## 5. Przegląd kodu z 2026-07-30 — znalezione błędy i nieścisłości
+
+Przegląd zmian z tej sesji (PWA, losowanie sesji, ikony, zgłoszenia, tryb na czas).
+Nic z poniższych nie jest naprawione — kolejność według wagi.
+
+### A. Powtórka w buforze sesji jest z góry zaliczana jako błąd (tryb na czas) 🔴
+
+Najpoważniejsze. Dotyczy tylko włączonego trybu na czas.
+
+Sygnatura biegu w [useDealTimer](src/hooks/useDealTimer.ts) to `${resetKey}|${limitSeconds}|${enabled}`,
+gdzie `resetKey` to id rozdania. Bufor sesji powtarza **to samo `dealId`**, a nietrafienie
+w przebiegu głównym **nie jest finalizowane** ([useDailySession.ts:73](src/hooks/useDailySession.ts:73)),
+więc `consecutiveCorrect` się nie zmienia i `limitSeconds` zostaje ten sam. Sygnatura jest
+identyczna → `expired` nie jest kasowane.
+
+Skutek: rozdanie, które przepadło na czas w przebiegu głównym, wraca w buforze z zegarem
+zamrożonym na 0:00 i po odsłonięciu od razu pokazuje „Czas minął — zaliczone jako błąd".
+Użytkownik nie dostaje żadnej szansy, a do historii trafia druga, nieprawdziwa porażka.
+
+Kierunek naprawy: dołożyć do `resetKey` licznik podejścia (np. `session.sessionToken`),
+żeby każde nowe wejście w rozdanie zaczynało świeży bieg. Uwaga przy okazji: RESTART
+celowo **nie** ma resetować zegara (opisane w punkcie 1), więc rozróżnienie „nowe podejście
+z sesji" vs „RESTART w tym samym podejściu" musi zostać.
+
+### B. Odmowa natywnego dialogu instalacji — panel podaje nieprawdę 🟠
+
+[useInstallPrompt.ts:96](src/hooks/useInstallPrompt.ts:96) zeruje `deferred` niezależnie
+od wyniku, bo zdarzenia nie da się użyć drugi raz. Ale gdy użytkownik Androida **odrzuci**
+natywne okno, `available` spada do `false` i karta w „Mój panel" wpada w gałąź komunikatu
+„Ta przeglądarka nie zgłasza możliwości instalacji. Na telefonie otwórz bridgeloop.pl
+w Chrome (Android)…" — czyli radzi zrobić dokładnie to, co użytkownik właśnie robi.
+
+Kierunek naprawy: osobna flaga „prompt zużyty" i własny komunikat („Instalacja przerwana —
+odśwież stronę, żeby spróbować ponownie”). Chrome zwykle przysyła `beforeinstallprompt`
+ponownie przy kolejnej nawigacji, więc odświeżenie faktycznie pomaga.
+
+### C. Usunięcie konta zostawia e-mail w zgłoszeniach 🟠 (prywatność)
+
+`deal_reports.user_id` ma `on delete set null`, ale `reporter_label` przechowuje
+`username (e-mail)` jako zwykły tekst. Admin usuwający konto Edge Functionem `delete-user`
+kasuje profil, postępy i historię — a adres e-mail zostaje w zgłoszeniach na zawsze.
+
+Kierunek naprawy: trigger `before delete on auth.users` zerujący `reporter_label`, albo
+dopisanie tego kroku do `delete-user`. Alternatywa: nie zapisywać e-maila, tylko sam login.
+
+### D. Zamknięcie modala w trakcie wysyłki gubi wynik 🟡
+
+W [ReportDeal.tsx](src/components/ReportDeal.tsx) tło modala zamyka go także podczas
+`phase === 'sending'`. `close()` ustawia fazę na `form`, ale trwający `insert` po powrocie
+ustawia `sent` przy zamkniętym oknie. Przy następnym otwarciu użytkownik widzi „Zgłoszenie
+wysłane", choć niczego nie napisał — a przy błędzie nie dowie się, że wysyłka padła.
+
+Kierunek naprawy: blokada zamykania w trakcie wysyłki albo ignorowanie odpowiedzi po zamknięciu.
+
+### E. Brak ograniczenia długości zgłoszenia w bazie 🟡
+
+Formularz pilnuje 800 znaków (`maxLength`), ale [0008_deal_reports.sql](supabase/migrations/0008_deal_reports.sql)
+nie ma żadnego ograniczenia. Zatwierdzony użytkownik może wysłać żądanie z pominięciem UI
+i wstawić dowolnie długi tekst; nie ma też limitu liczby zgłoszeń.
+
+Kierunek naprawy: `check (char_length(message) between 1 and 2000)` w migracji.
+
+### F. Pułapka na przyszłość: `.select()` przy insercie zgłoszenia je zepsuje ⚪
+
+Zwykły użytkownik ma politykę INSERT, ale **nie ma** SELECT na `deal_reports`. Działa to
+tylko dlatego, że `insert()` bez `.select()` nie wysyła `Prefer: return=representation`
+(sprawdzone w postgrest-js: nagłówek dokłada wyłącznie `.select()`), więc PostgREST
+odpowiada 204 i nie czyta wiersza. Dopisanie `.select()` — choćby po to, żeby dostać `id` —
+wywali każde zgłoszenie na błędzie RLS.
+
+### G. Niespójność progów: `sm:` jest tylko szerokościowy, `md:` też wysokościowy ⚪
+
+Po zmianie w [tailwind.config.js](tailwind.config.js) `md:` wymaga `min-height: 500px`,
+a `sm:` został przy samej szerokości. Na telefonie w poziomie (812×375) `sm:` już działa,
+`md:` jeszcze nie. Dziś nieszkodliwe, bo `sm:` występuje raz (siatka kafelków w panelu),
+ale to pułapka przy dopisywaniu kolejnych stylów.
+
 ## Notatki ogólne
 - Deploy: push na `master` → GitHub Actions ([.github/workflows/deploy.yml](.github/workflows/deploy.yml)) → `bridgeloop.pl`. Praca na branchu `dev`, merge ff do `master`.
 - Po dłuższej przerwie: sprawdzić, czy certyfikat HTTPS dla domeny już się wystawił i włączyć „Enforce HTTPS" w Settings → Pages.
