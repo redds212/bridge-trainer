@@ -97,7 +97,8 @@ jeśli klient się nie otworzył.
 
 **Fallback bez backendu (gdyby Supabase miało być później):** `mailto:kontakt@bridgeloop.pl` z prewypełnionym tematem zawierającym `dealId`. Szybkie do wdrożenia, ale bez panelu admina.
 
-**Decyzja podjęta (2026-07-30):** szybki `mailto`.
+**Decyzja podjęta (2026-07-30):** najpierw `mailto`, tego samego dnia zastąpiony
+wariantem z tabelą (patrz opis na górze punktu).
 
 </details>
 
@@ -177,9 +178,14 @@ urządzeń i czy sesja dzienna ma się dać rozpocząć offline.
 ## 5. Przegląd kodu z 2026-07-30 — znalezione błędy i nieścisłości
 
 Przegląd zmian z tej sesji (PWA, losowanie sesji, ikony, zgłoszenia, tryb na czas).
-Nic z poniższych nie jest naprawione — kolejność według wagi.
+**Stan: A, B, C, E, F, G naprawione; D zostaje otwarte.**
 
-### A. Powtórka w buforze sesji jest z góry zaliczana jako błąd (tryb na czas) 🔴
+**⚠️ Wdrożenie:** poprawki C, E i F wymagają uruchomienia
+[0009_deal_reports_fixes.sql](supabase/migrations/0009_deal_reports_fixes.sql).
+W przeciwieństwie do 0008 ta migracja **nie blokuje deployu** — bez niej aplikacja
+działa tak jak dotąd, po prostu bez tych trzech zabezpieczeń.
+
+### A. Powtórka w buforze sesji jest z góry zaliczana jako błąd (tryb na czas) — ✅ NAPRAWIONE
 
 Najpoważniejsze. Dotyczy tylko włączonego trybu na czas.
 
@@ -194,11 +200,14 @@ zamrożonym na 0:00 i po odsłonięciu od razu pokazuje „Czas minął — zali
 Użytkownik nie dostaje żadnej szansy, a do historii trafia druga, nieprawdziwa porażka.
 
 Kierunek naprawy: dołożyć do `resetKey` licznik podejścia (np. `session.sessionToken`),
-żeby każde nowe wejście w rozdanie zaczynało świeży bieg. Uwaga przy okazji: RESTART
-celowo **nie** ma resetować zegara (opisane w punkcie 1), więc rozróżnienie „nowe podejście
-z sesji" vs „RESTART w tym samym podejściu" musi zostać.
+żeby każde nowe wejście w rozdanie zaczynało świeży bieg.
 
-### B. Odmowa natywnego dialogu instalacji — panel podaje nieprawdę 🟠
+**Naprawiono:** `resetKey` to teraz `${dealId}|${session.sessionToken}` ([App.tsx](src/App.tsx)).
+Token rośnie po każdej odpowiedzi, więc powtórka z bufora dostaje świeży bieg; w swobodnej
+grze token stoi na 0, więc RESTART nadal nie fabrykuje nowego czasu. Sprawdzone na samym
+hooku: po wygaśnięciu RESTART zostawia 0:00 i `expired`, a nowy token wraca do pełnego limitu.
+
+### B. Odmowa natywnego dialogu instalacji — panel podaje nieprawdę — ✅ NAPRAWIONE
 
 [useInstallPrompt.ts:96](src/hooks/useInstallPrompt.ts:96) zeruje `deferred` niezależnie
 od wyniku, bo zdarzenia nie da się użyć drugi raz. Ale gdy użytkownik Androida **odrzuci**
@@ -210,16 +219,22 @@ Kierunek naprawy: osobna flaga „prompt zużyty" i własny komunikat („Instal
 odśwież stronę, żeby spróbować ponownie”). Chrome zwykle przysyła `beforeinstallprompt`
 ponownie przy kolejnej nawigacji, więc odświeżenie faktycznie pomaga.
 
-### C. Usunięcie konta zostawia e-mail w zgłoszeniach 🟠 (prywatność)
+**Naprawiono:** flaga `promptDeclined` w [useInstallPrompt.ts](src/hooks/useInstallPrompt.ts)
+i osobny komunikat „Instalacja została przerwana. Odśwież stronę…”. Nowe zdarzenie od
+przeglądarki kasuje flagę i przywraca przycisk. Sprawdzone syntetycznym zdarzeniem.
+
+### C. Usunięcie konta zostawia e-mail w zgłoszeniach (prywatność) — ✅ NAPRAWIONE (0009)
 
 `deal_reports.user_id` ma `on delete set null`, ale `reporter_label` przechowuje
 `username (e-mail)` jako zwykły tekst. Admin usuwający konto Edge Functionem `delete-user`
 kasuje profil, postępy i historię — a adres e-mail zostaje w zgłoszeniach na zawsze.
 
-Kierunek naprawy: trigger `before delete on auth.users` zerujący `reporter_label`, albo
-dopisanie tego kroku do `delete-user`. Alternatywa: nie zapisywać e-maila, tylko sam login.
+**Naprawiono (0009):** trigger `before delete on auth.users` zeruje `reporter_label`.
+BEFORE, bo po akcji klucza obcego `user_id` byłby już NULL i nie dałoby się dopasować
+wierszy. Trigger, a nie zmiana w `delete-user`, żeby złapać też usunięcia zrobione
+poza aplikacją. Klient i tak mapuje pusty `reporter_label` na „(konto usunięte)”.
 
-### D. Zamknięcie modala w trakcie wysyłki gubi wynik 🟡
+### D. Zamknięcie modala w trakcie wysyłki gubi wynik — ⬜ OTWARTE
 
 W [ReportDeal.tsx](src/components/ReportDeal.tsx) tło modala zamyka go także podczas
 `phase === 'sending'`. `close()` ustawia fazę na `form`, ale trwający `insert` po powrocie
@@ -228,28 +243,38 @@ wysłane", choć niczego nie napisał — a przy błędzie nie dowie się, że w
 
 Kierunek naprawy: blokada zamykania w trakcie wysyłki albo ignorowanie odpowiedzi po zamknięciu.
 
-### E. Brak ograniczenia długości zgłoszenia w bazie 🟡
+### E. Brak ograniczenia długości zgłoszenia w bazie — ✅ NAPRAWIONE (0009)
 
 Formularz pilnuje 800 znaków (`maxLength`), ale [0008_deal_reports.sql](supabase/migrations/0008_deal_reports.sql)
 nie ma żadnego ograniczenia. Zatwierdzony użytkownik może wysłać żądanie z pominięciem UI
 i wstawić dowolnie długi tekst; nie ma też limitu liczby zgłoszeń.
 
-Kierunek naprawy: `check (char_length(message) between 1 and 2000)` w migracji.
+**Naprawiono (0009):** `check (char_length(message) between 1 and 2000)`. Limit z zapasem
+nad 800 z formularza, żeby nie odrzucić niczego, co przeszłoby przez UI.
 
-### F. Pułapka na przyszłość: `.select()` przy insercie zgłoszenia je zepsuje ⚪
+### F. Pułapka: `.select()` przy insercie zgłoszenia je zepsuje — ✅ NAPRAWIONE (0009)
 
 Zwykły użytkownik ma politykę INSERT, ale **nie ma** SELECT na `deal_reports`. Działa to
 tylko dlatego, że `insert()` bez `.select()` nie wysyła `Prefer: return=representation`
 (sprawdzone w postgrest-js: nagłówek dokłada wyłącznie `.select()`), więc PostgREST
 odpowiada 204 i nie czyta wiersza. Dopisanie `.select()` — choćby po to, żeby dostać `id` —
-wywali każde zgłoszenie na błędzie RLS.
+wywaliłoby każde zgłoszenie na błędzie RLS.
 
-### G. Niespójność progów: `sm:` jest tylko szerokościowy, `md:` też wysokościowy ⚪
+**Naprawiono (0009):** polityka `deal_reports_select_own`, jak `srs_select_own`
+i `attempts_select_own`. Wyrównuje `deal_reports` do reszty tabel użytkownika i likwiduje
+pułapkę, zamiast ostrzegać przed nią komentarzem.
+
+### G. Niespójność progów: `sm:` tylko szerokościowy, `md:` też wysokościowy — ✅ NAPRAWIONE
 
 Po zmianie w [tailwind.config.js](tailwind.config.js) `md:` wymaga `min-height: 500px`,
 a `sm:` został przy samej szerokości. Na telefonie w poziomie (812×375) `sm:` już działa,
-`md:` jeszcze nie. Dziś nieszkodliwe, bo `sm:` występuje raz (siatka kafelków w panelu),
-ale to pułapka przy dopisywaniu kolejnych stylów.
+`md:` jeszcze nie. Było nieszkodliwe, bo `sm:` występowało raz (siatka kafelków w panelu),
+ale stanowiło pułapkę przy dopisywaniu kolejnych stylów.
+
+**Naprawiono:** to jedno `sm:grid-cols-4` zmienione na `md:grid-cols-4`, więc `md:` jest
+teraz **jedynym** progiem w projekcie — nie ma się z czym rozjechać. Powód wyboru progu
+i ostrzeżenie przed sięganiem po `sm:`/`lg:`/`xl:` opisane w [tailwind.config.js](tailwind.config.js).
+Skutek uboczny: tablet 640–767 px szerokości dostaje kafelki w 2 kolumnach zamiast 4.
 
 ## Notatki ogólne
 - Deploy: push na `master` → GitHub Actions ([.github/workflows/deploy.yml](.github/workflows/deploy.yml)) → `bridgeloop.pl`. Praca na branchu `dev`, merge ff do `master`.

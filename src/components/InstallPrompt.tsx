@@ -89,7 +89,7 @@ export function InstallBanner() {
  * zmienił zdanie. Styl slate, bo panel nie został jeszcze przeniesiony na tokeny brand.
  */
 export function InstallCard() {
-  const { available, needsManualSteps, installed, install } = useInstallPrompt();
+  const { available, needsManualSteps, installed, promptDeclined, install } = useInstallPrompt();
   const [showSteps, setShowSteps] = useState(false);
 
   return (
@@ -110,6 +110,10 @@ export function InstallCard() {
             {needsManualSteps ? 'Jak zainstalować?' : 'Zainstaluj aplikację'}
           </button>
         </>
+      ) : promptDeclined ? (
+        <p className="text-slate-400 text-xs">
+          Instalacja została przerwana. Odśwież stronę, żeby przeglądarka zaproponowała ją ponownie.
+        </p>
       ) : (
         <p className="text-slate-400 text-xs">
           Ta przeglądarka nie zgłasza możliwości instalacji. Na telefonie otwórz bridgeloop.pl

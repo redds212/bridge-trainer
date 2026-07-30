@@ -134,11 +134,17 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
 
   // Tryb na czas: limit zależny od opanowania tego rozdania; zero → auto-odsłonięcie.
   const timerLimit = timeLimitForLevel(selectedId ? getEntry(selectedId).consecutiveCorrect : 0);
+  // Klucz resetu zawiera token sesji, bo bufor powtarza TO SAMO rozdanie: bez tego
+  // nietrafienie z przebiegu głównego (które nie zmienia `consecutiveCorrect`, więc
+  // i limitu) dawało identyczną sygnaturę biegu, zegar wracał zamrożony na zerze
+  // i powtórka była z góry przegrana. Token rośnie po każdej odpowiedzi, więc każde
+  // nowe podejście startuje świeżo. W swobodnej grze token stoi na 0, dzięki czemu
+  // RESTART nadal nie fabrykuje nowego czasu.
   const timer = useDealTimer({
     enabled: timedMode && !!selectedDeal,
     phase: state?.phase,
     limitSeconds: timerLimit,
-    resetKey: selectedDeal?.id ?? null,
+    resetKey: selectedDeal ? `${selectedDeal.id}|${session.sessionToken}` : null,
     onExpire: revealSolution,
   });
 

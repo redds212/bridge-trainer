@@ -41,6 +41,11 @@ const isIOS = /iphone|ipad|ipod/i.test(ua)
 let deferred: BeforeInstallPromptEvent | null = null;
 let installed = isStandalone();
 let dismissed = readDismissed();
+// Natywne okno instalacji zostało pokazane i zamknięte bez instalacji. Trzymamy to
+// osobno, bo `deferred` musi wtedy i tak wylecieć (zdarzenia nie da się użyć drugi
+// raz), a bez tej flagi panel wpadał w komunikat „ta przeglądarka nie zgłasza
+// możliwości instalacji" — pokazywany komuś, kto właśnie odrzucił propozycję.
+let promptDeclined = false;
 
 // Licznik wersji zamiast obiektu-migawki: useSyncExternalStore porównuje wynik
 // referencyjnie, więc świeży obiekt przy każdym odczycie zapętliłby render.
@@ -62,6 +67,7 @@ const getSnapshot = () => version;
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault(); // bez tego Chrome pokazuje własny pasek w swoim momencie
   deferred = e as BeforeInstallPromptEvent;
+  promptDeclined = false; // przeglądarka znów proponuje instalację
   emit();
 });
 
@@ -80,6 +86,8 @@ export interface InstallPrompt {
   installed: boolean;
   /** Użytkownik schował baner; przycisk w panelu i tak zostaje dostępny. */
   dismissed: boolean;
+  /** Natywne okno instalacji zostało odrzucone — pomoże odświeżenie strony. */
+  promptDeclined: boolean;
   install: () => Promise<'accepted' | 'dismissed' | 'unavailable'>;
   dismiss: () => void;
 }
@@ -92,8 +100,11 @@ export function useInstallPrompt(): InstallPrompt {
     const event = deferred;
     await event.prompt();
     const { outcome } = await event.userChoice;
-    // Zdarzenia nie da się użyć drugi raz; przy odmowie Chrome przyśle nowe.
+    // Zdarzenia nie da się użyć drugi raz; przy odmowie Chrome przyśle nowe przy
+    // kolejnej nawigacji — do tego czasu mówimy o tym wprost zamiast udawać, że
+    // przeglądarka nie wspiera instalacji.
     deferred = null;
+    if (outcome !== 'accepted') promptDeclined = true;
     emit();
     return outcome;
   }, []);
@@ -109,6 +120,7 @@ export function useInstallPrompt(): InstallPrompt {
     needsManualSteps: isIOS && deferred === null,
     installed,
     dismissed,
+    promptDeclined,
     install,
     dismiss,
   };

@@ -97,7 +97,7 @@ export function UserPanel({
       <div className="flex-1 overflow-y-auto p-6 max-w-4xl mx-auto w-full space-y-6">
 
         {/* Stats row */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <StatCard icon="🔥" value={`${stats.streak}`} label={stats.streak === 1 ? 'dzień z rzędu' : 'dni z rzędu'} accent="text-orange-400" />
           <StatCard icon="📊" value={stats.avgPerDay ? stats.avgPerDay.toFixed(1) : '0'} label="śr. dziennie" accent="text-sky-400" />
           <StatCard icon="✅" value={`${stats.totalAttempts}`} label="rozwiązanych łącznie" accent="text-emerald-400" />

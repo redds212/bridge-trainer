@@ -9,6 +9,12 @@ export default {
         // desktopowy (tabela licytacji, ContractBox, pt-16 nad filcem) ściskał tam
         // stół do ~80 px i przycinał ręce N/S. Poniżej 500 px wysokości wracamy do
         // układu mobilnego: chipy + arkusz, czyli tego, co się skaluje do miejsca.
+        //
+        // UWAGA: `md:` to JEDYNY próg używany w projekcie i celowo tak zostaje.
+        // Wbudowane `sm:`, `lg:`, `xl:` patrzą wyłącznie na szerokość, więc mieszanie
+        // ich z tym progiem daje stany pośrednie — np. przy 812×375 `sm:` już działa,
+        // a `md:` jeszcze nie. Zanim sięgniesz po kolejny próg, sprawdź, czy chodzi Ci
+        // o samą szerokość, czy o „mieści się układ desktopowy".
         md: { raw: '(min-width: 768px) and (min-height: 500px)' },
       },
       colors: {
