@@ -37,6 +37,45 @@ export interface SessionSplit {
   newLimit: number;
 }
 
+/**
+ * Losowanie nowych rozdań musi być POWTARZALNE w obrębie dnia, a nie świeże przy
+ * każdym wywołaniu. `generateDailySession` woła nie tylko `start()`, ale też panel
+ * użytkownika przy każdym renderze („Dzisiejsza sesja" i plan powtórek) — przy
+ * `Math.random()` podgląd pokazywałby inny zestaw niż ten, który potem dostaniesz,
+ * a licznik skakałby przy każdym przeliczeniu. Ziarno z daty daje jedno tasowanie
+ * na dobę: dziś stałe, jutro inne.
+ */
+function hashSeed(text: string): number {
+  let h = 1779033703 ^ text.length;
+  for (let i = 0; i < text.length; i++) {
+    h = Math.imul(h ^ text.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  return h >>> 0;
+}
+
+/** mulberry32 — kilka linijek, dobry rozrzut, w zupełności wystarcza do tasowania. */
+function seededRandom(seed: number): () => number {
+  let a = seed;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Fisher–Yates na kopii — wejście zostaje nietknięte. */
+function shuffled<T>(items: T[], rand: () => number): T[] {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
 export function modeSplit(settings: UserSettings): SessionSplit {
   const prop = MODE_PROPORTIONS[settings.mode];
   const reviewLimit = Math.round(settings.dailyTarget * prop.reviewPct);
@@ -100,12 +139,14 @@ export function generateDailySession(
     }
   }
 
-  // Step 3 — new deals fill remaining slots up to X.
+  // Step 3 — new deals fill remaining slots up to X. Losujemy z CAŁEJ puli nowych,
+  // zamiast brać pierwsze z brzegu: baza oddaje rozdania posortowane (`is_base`,
+  // potem `created_at`), więc branie po kolei oznaczało w kółko te same, najstarsze
+  // pozycje — zwłaszcza gdy sesja została przerwana i zaczynana od nowa.
   const used = new Set(slots.map(s => s.dealId));
-  for (const deal of deals) {
+  const newPool = deals.filter(d => !used.has(d.id) && entryOf(d.id).status === 'NEW');
+  for (const deal of shuffled(newPool, seededRandom(hashSeed(today)))) {
     if (slots.length >= X) break;
-    if (used.has(deal.id)) continue;
-    if (entryOf(deal.id).status !== 'NEW') continue;
     slots.push({ dealId: deal.id, kind: 'new' });
   }
 
