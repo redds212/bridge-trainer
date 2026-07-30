@@ -110,8 +110,8 @@ poniżej). Skoro trzeba było zaczynać od zera, wygrał zapis zgodny z resztą 
 ikon też jest inline'owana. Przy okazji: żadnego dodatkowego żądania sieciowego ani pliku
 do cache'owania w service workerze.
 
-**Do rozważenia kiedyś:** `src/assets/react.svg`, `vite.svg` i `hero.png` to również
-pozostałości szablonu — nic ich nie importuje, więc nie trafiają do bundla, ale leżą w repo.
+Pozostałości szablonu z `src/assets/` (`react.svg`, `vite.svg`, `hero.png`) usunięte
+przy okazji — nic ich nie importowało. Repo nie ma już żadnych plików ze scaffoldu Vite.
 
 <details><summary>Oryginalne notatki projektowe</summary>
 
