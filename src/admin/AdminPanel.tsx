@@ -3,10 +3,17 @@ import type { Deal } from '../types';
 import type { DealRecord, BulkAddResult, BackfillResult } from '../hooks/useDeals';
 import { DealBuilder } from './DealBuilder';
 import { UsersAdmin } from './UsersAdmin';
+import { ReportsAdmin } from './ReportsAdmin';
 import { validateDeal } from '../lib/validateDeal';
 import { dealSignature, normalizeTitle } from '../lib/dealSignature';
 
-type Tab = 'deals' | 'users';
+type Tab = 'deals' | 'users' | 'reports';
+
+const TAB_LABEL: Record<Tab, string> = {
+  deals: 'Rozdania',
+  users: 'Użytkownicy',
+  reports: 'Zgłoszenia',
+};
 
 type BuilderMode =
   | { type: 'new' }
@@ -249,7 +256,7 @@ export function AdminPanel({ allDeals, loading, error, onAdd, onAddMany, onBackf
         </button>
         <h1 className="text-white font-bold">Panel Administracyjny</h1>
         <div className="flex gap-1 ml-2">
-          {(['deals', 'users'] as Tab[]).map(t => (
+          {(['deals', 'users', 'reports'] as Tab[]).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -257,7 +264,7 @@ export function AdminPanel({ allDeals, loading, error, onAdd, onAddMany, onBackf
                 tab === t ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              {t === 'deals' ? 'Rozdania' : 'Użytkownicy'}
+              {TAB_LABEL[t]}
             </button>
           ))}
         </div>
@@ -266,6 +273,19 @@ export function AdminPanel({ allDeals, loading, error, onAdd, onAddMany, onBackf
 
       <div className="flex-1 overflow-y-auto p-6 max-w-5xl mx-auto w-full space-y-8">
         {tab === 'users' && <UsersAdmin />}
+        {tab === 'reports' && (
+          <ReportsAdmin
+            onEditDeal={(dealId) => {
+              // Zgłoszenie może dotyczyć rozdania, którego już nie ma — wtedy karta
+              // zgłoszenia sama pokazuje komunikat zamiast otwierać pusty edytor.
+              const target = allDeals.find(d => d.id === dealId);
+              if (!target) return false;
+              setBuilder({ type: 'edit', deal: toDeal(target) });
+              setTab('deals');
+              return true;
+            }}
+          />
+        )}
         {tab === 'deals' && (<>
         {flash && (
           <div className="bg-emerald-900/40 border border-emerald-700 rounded-lg px-4 py-2 text-emerald-300 text-sm">✓ {flash}</div>

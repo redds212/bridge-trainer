@@ -79,6 +79,21 @@ export type AttemptRow = {
   ts: string;
 };
 
+export type ReportStatus = 'new' | 'seen' | 'resolved';
+
+export type DealReportRow = {
+  id: number;
+  deal_id: string;
+  /** Tytuł skopiowany w chwili zgłoszenia — przetrwa edycję albo usunięcie rozdania. */
+  deal_title: string;
+  user_id: string | null;
+  /** Kto zgłaszał; zostaje czytelny nawet po usunięciu konta (user_id → NULL). */
+  reporter_label: string;
+  message: string;
+  status: ReportStatus;
+  created_at: string;
+};
+
 type Insert<T, Optional extends keyof T> = Omit<T, Optional> & Partial<Pick<T, Optional>>;
 
 type Empty = Record<string, never>;
@@ -126,6 +141,12 @@ export interface Database {
         Row: AttemptRow;
         Insert: Insert<AttemptRow, 'id' | 'ts'>;
         Update: Partial<AttemptRow>;
+        Relationships: [];
+      };
+      deal_reports: {
+        Row: DealReportRow;
+        Insert: Insert<DealReportRow, 'id' | 'deal_title' | 'reporter_label' | 'status' | 'created_at'>;
+        Update: Partial<DealReportRow>;
         Relationships: [];
       };
     };

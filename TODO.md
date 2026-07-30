@@ -56,24 +56,28 @@ Stan na: 2026-06-25.
 
 ---
 
-## 2. Opcja zgłoszenia błędu w rozdaniu — ✅ ZROBIONE (wariant `mailto`)
+## 2. Opcja zgłoszenia błędu w rozdaniu — ✅ ZROBIONE (tabela + panel admina)
 
-**Zrealizowany wariant (2026-07-30):** ikona flagi w lewym dolnym rogu filcu →
-modal z krótką wiadomością → `mailto:kontakt@bridgeloop.pl` z prewypełnionym tematem
-i treścią. Do wiadomości doklejane są dane techniczne (tytuł, `dealId`, kontrakt,
-kategoria, zgłaszający, data), żeby dało się odnaleźć rozdanie.
+**Wersja druga (2026-07-30):** zgłoszenie zapisuje się w tabeli `deal_reports`
+i pojawia się w panelu admina. Pierwsza wersja składała `mailto:` — wymagała od
+użytkownika własnego klienta pocztowego i ręcznego wysłania, a zgłoszenie przepadało,
+jeśli klient się nie otworzył.
 
-- **Pliki:** [src/components/ReportDeal.tsx](src/components/ReportDeal.tsx); przycisk
-  wstrzykiwany do [BridgeTable](src/components/BridgeTable.tsx) propsem `report`
-  (tak samo jak `timer`), żeby stół nie zależał od `useAuth` i nie psuł harnessu
-  `?preview=table`.
-- **Świadomy kompromis:** zgłoszenia lądują w skrzynce, nie w aplikacji. Brak tabeli
-  `deal_reports`, brak przeglądu w panelu admina, brak statusów. Jeśli zgłoszeń będzie
-  dużo, wróć do wariantu z bazą (notatki poniżej zostają aktualne).
-- **Ograniczenie `mailto`:** nie wysyła wiadomości, tylko otwiera klienta pocztowego
-  z gotowym szkicem — użytkownik musi go u siebie wysłać. Na komputerze bez
-  skonfigurowanego klienta nie stanie się nic, dlatego w modalu jest też kopiowanie
-  treści do schowka i adres wypisany wprost.
+- **⚠️ Wdrożenie:** uruchomić [0008_deal_reports.sql](supabase/migrations/0008_deal_reports.sql)
+  w Supabase SQL Editor **przed** deployem. Bez tabeli przycisk „Wyślij" zwróci błąd.
+- **Pliki:** [src/components/ReportDeal.tsx](src/components/ReportDeal.tsx) (formularz),
+  [src/hooks/useDealReports.ts](src/hooks/useDealReports.ts),
+  [src/admin/ReportsAdmin.tsx](src/admin/ReportsAdmin.tsx) (zakładka „Zgłoszenia”).
+  Przycisk wstrzykiwany do [BridgeTable](src/components/BridgeTable.tsx) propsem `report`
+  (jak `timer`), żeby stół nie zależał od `useAuth` i nie psuł harnessu `?preview=table`.
+- **Schemat:** `deal_id` bez klucza obcego (jak w `attempts`) — zgłoszenie przeżywa
+  usunięcie rozdania; `deal_title` i `reporter_label` kopiowane w chwili zgłoszenia, żeby
+  treść pozostała czytelna po edycji rozdania i po usunięciu konta. Statusy: new / seen /
+  resolved. RLS: wstawiać może zatwierdzony użytkownik we własnym imieniu, czytać
+  i zmieniać tylko admin.
+- **Bez maila.** Zgłoszenia trzeba przeglądać w panelu; nie ma powiadomień. Dołożenie
+  wysyłki to Edge Function (wzorzec: `delete-user`) plus klucz dostawcy poczty w sekretach
+  Supabase — tabela jest już gotowym fundamentem, nic nie trzeba przerabiać.
 
 <details><summary>Oryginalne notatki projektowe (wariant z tabelą — nadal aktualne, gdyby wracać)</summary>
 
