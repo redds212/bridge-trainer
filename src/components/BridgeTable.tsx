@@ -187,12 +187,19 @@ export function BridgeTable({ deal, state, timer }: Props) {
           NS {state.trickScores.NS} <span className="text-brand-dim">·</span> EW {state.trickScores.EW}
         </span>
         {timer}
+        {/* Ten sam chip otwiera i zamyka arkusz — pasek chipów jest nad filcem, więc
+            zostaje klikalny, kiedy arkusz przykrywa stół. */}
         <button
-          onClick={() => setSheetOpen(true)}
+          onClick={() => setSheetOpen(open => !open)}
+          aria-expanded={sheetOpen}
           className="ml-auto flex h-9 items-center gap-1 rounded-[7px] border border-brand-line bg-brand-soft px-3 text-[12px] leading-none text-brand-accent-soft"
         >
           Licytacja
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+          <svg
+            width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth="3" strokeLinecap="round"
+            className={sheetOpen ? 'rotate-180' : ''}
+          >
             <polyline points="6 9 12 15 18 9" />
           </svg>
         </button>
