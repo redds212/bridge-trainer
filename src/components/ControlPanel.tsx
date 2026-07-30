@@ -1,4 +1,5 @@
 import type { GamePhase } from '../types';
+import { Icon } from './Icon';
 
 interface Props {
   phase: GamePhase;
@@ -25,13 +26,13 @@ export function ControlPanel({ phase, currentStep, totalSteps, isAnimating, onNe
       className="flex flex-shrink-0 items-center justify-center gap-2 px-2 pt-2 md:gap-3 md:pt-3"
       style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
     >
-      <button onClick={onRewind} aria-label="Restart" className={`${secondary} w-11 md:w-auto`}>
-        <span>⏮</span>
+      <button onClick={onRewind} aria-label="Restart" title="Restart" className={`${secondary} w-11 md:w-auto`}>
+        <Icon name="restart" size={15} />
         <span className="hidden md:inline">RESTART</span>
       </button>
 
-      <button onClick={onPrev} disabled={!canPrev} aria-label="Poprzedni" className={`${secondary} w-11 md:w-auto`}>
-        <span>◀</span>
+      <button onClick={onPrev} disabled={!canPrev} aria-label="Poprzedni" title="Poprzedni" className={`${secondary} w-11 md:w-auto`}>
+        <Icon name="chevron-left" size={15} strokeWidth={2.5} />
         <span className="hidden md:inline">POPRZEDNI</span>
       </button>
 
@@ -49,7 +50,7 @@ export function ControlPanel({ phase, currentStep, totalSteps, isAnimating, onNe
         }`}
       >
         <span>NEXT</span>
-        <span>▶</span>
+        <Icon name="chevron-right" size={15} strokeWidth={2.5} />
       </button>
     </div>
   );

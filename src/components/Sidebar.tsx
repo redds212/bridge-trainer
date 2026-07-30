@@ -2,6 +2,7 @@ import type { Deal, SRSEntry, SRSStatus } from '../types';
 import { isReviewDue } from '../hooks/useSRS';
 import { useAuth } from '../auth/AuthContext';
 import { LoopMark } from './LoopMark';
+import { Icon } from './Icon';
 
 interface Props {
   deals: Deal[];
@@ -78,24 +79,30 @@ export function Sidebar({ deals, selectedId, getEntry, onSelect, onAdmin, onPane
             {onPanel && (
               <button
                 onClick={onPanel}
-                className="flex-1 text-[10px] font-semibold px-1 py-[5px] rounded-[7px] bg-brand-soft text-brand-accent-soft border border-brand-line hover:bg-brand-line/60 transition-colors"
+                className="flex flex-1 items-center justify-center gap-1 text-[10px] font-semibold px-1 py-[5px] rounded-[7px] bg-brand-soft text-brand-accent-soft border border-brand-line hover:bg-brand-line/60 transition-colors"
               >
+                <Icon name="user" size={11} />
                 Mój panel
               </button>
             )}
             {user.isAdmin && onAdmin && (
               <button
                 onClick={onAdmin}
-                className="flex-1 text-[10px] font-semibold px-1 py-[5px] rounded-[7px] bg-brand-soft text-brand-accent-2 border border-brand-line hover:bg-brand-line/60 transition-colors"
+                className="flex flex-1 items-center justify-center gap-1 text-[10px] font-semibold px-1 py-[5px] rounded-[7px] bg-brand-soft text-brand-accent-2 border border-brand-line hover:bg-brand-line/60 transition-colors"
               >
+                <Icon name="shield" size={11} />
                 Admin
               </button>
             )}
+            {/* Sama ikona: „Wyloguj" zjadało trzecią część rzędu przy foncie 10 px.
+                Bez etykiety obowiązkowe aria-label i tooltip. */}
             <button
               onClick={logout}
-              className="flex-1 text-[10px] font-semibold px-1 py-[5px] rounded-[7px] bg-[rgba(224,82,77,.12)] text-[#e0524d] border border-[rgba(224,82,77,.3)] hover:bg-[rgba(224,82,77,.2)] transition-colors"
+              aria-label="Wyloguj"
+              title="Wyloguj"
+              className="flex flex-shrink-0 items-center justify-center w-7 py-[5px] rounded-[7px] bg-[rgba(224,82,77,.12)] text-[#e0524d] border border-[rgba(224,82,77,.3)] hover:bg-[rgba(224,82,77,.2)] transition-colors"
             >
-              Wyloguj
+              <Icon name="logout" size={12} />
             </button>
           </div>
         </div>

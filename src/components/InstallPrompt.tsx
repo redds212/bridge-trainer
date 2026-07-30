@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useInstallPrompt } from '../hooks/useInstallPrompt';
+import { Icon } from './Icon';
 
 /**
  * Kroki instalacji dla iOS — Safari nie daje żadnego API, więc zostaje pokazanie
@@ -7,13 +8,7 @@ import { useInstallPrompt } from '../hooks/useInstallPrompt';
  * słownym trudno ją znaleźć wzrokiem na pasku.
  */
 function ShareIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline-block align-[-3px]">
-      <path d="M12 16V4" />
-      <polyline points="8 8 12 4 16 8" />
-      <path d="M6 12H5a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1h-1" />
-    </svg>
-  );
+  return <Icon name="share" size={16} className="inline-block align-[-3px]" />;
 }
 
 function IosInstructions({ onClose }: { onClose: () => void }) {

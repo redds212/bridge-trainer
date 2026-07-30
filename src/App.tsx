@@ -20,6 +20,7 @@ import { DealTimer } from './components/DealTimer';
 import { SessionBar } from './components/SessionBar';
 import { InstallBanner } from './components/InstallPrompt';
 import { ReportDealButton } from './components/ReportDeal';
+import { Icon } from './components/Icon';
 
 type View = 'trainer' | 'admin' | 'panel';
 
@@ -241,9 +242,7 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
           style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}
         >
           <button onClick={() => setSidebarOpen(true)} className="text-brand-dim hover:text-brand-text p-1" aria-label="Menu">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
+            <Icon name="menu" size={22} />
           </button>
           <span className="text-brand-text text-sm font-medium truncate">{selectedDeal?.title ?? 'BridgeLoop'}</span>
         </div>

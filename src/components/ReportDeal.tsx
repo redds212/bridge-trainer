@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Deal } from '../types';
 import { useAuth } from '../auth/AuthContext';
+import { Icon } from './Icon';
 
 const REPORT_ADDRESS = 'kontakt@bridgeloop.pl';
 const MAX_MESSAGE = 800;
@@ -27,15 +28,6 @@ function buildBody(deal: Deal, message: string, who: string): string {
     `Zgłasza: ${who}`,
     `Data: ${new Date().toLocaleString('pl-PL')}`,
   ].join('\n');
-}
-
-function FlagIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V4s-1 1-4 1-5-2-8-2-4 1-4 1z" />
-      <line x1="4" y1="22" x2="4" y2="15" />
-    </svg>
-  );
 }
 
 export function ReportDealButton({ deal }: { deal: Deal }) {
@@ -69,7 +61,7 @@ export function ReportDealButton({ deal }: { deal: Deal }) {
         title="Zgłoś błąd w rozdaniu"
         className="flex h-8 w-8 items-center justify-center rounded-[7px] border border-brand-line bg-brand-panel/80 text-brand-dim transition-colors hover:text-brand-text"
       >
-        <FlagIcon />
+        <Icon name="flag" size={14} />
       </button>
 
       {open && (

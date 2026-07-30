@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { GamePhase } from '../types';
+import { Icon } from './Icon';
 
 interface Props {
   phase: GamePhase;
@@ -11,11 +12,7 @@ interface Props {
 }
 
 function Chevron({ up }: { up: boolean }) {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className={up ? '' : 'rotate-180'}>
-      <polyline points="6 15 12 9 18 15" />
-    </svg>
-  );
+  return <Icon name="chevron-down" size={14} strokeWidth={3} className={up ? 'rotate-180' : ''} />;
 }
 
 // Telefon w poziomie ma ~375 px wysokości: rozwinięty opis, dok i pasek nie mieszczą

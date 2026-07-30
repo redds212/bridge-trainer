@@ -88,7 +88,32 @@ kategoria, zgłaszający, data), żeby dało się odnaleźć rozdanie.
 
 ---
 
-## 3. Przejście na ikonki w niektórych miejscach
+## 3. Przejście na ikonki w niektórych miejscach — ✅ ZROBIONE
+
+**Zrealizowany wariant (2026-07-30):** komponent [src/components/Icon.tsx](src/components/Icon.tsx)
+z zestawem 10 ikon obrysowych 24×24 (`currentColor`, zaokrąglone końce).
+
+Co zmienione:
+- **ControlPanel** — znaki Unicode `⏮ ◀ ▶` zastąpione ikonami. To była najpilniejsza
+  pozycja: te znaki na Androidzie potrafią wyjść jako kolorowe emoji zamiast szarej ikonki,
+  a na telefonie są jedyną treścią przycisków (etykiety chowają się poniżej `md:`).
+- **Sidebar** — „Wyloguj" na samą ikonę o stałej szerokości (`aria-label` + tooltip),
+  „Mój panel" i „Admin" dostały ikonki obok tekstu. Rząd przy foncie 10 px był ciasny:
+  dwa przyciski tekstowe urosły z ~74 px do ~97 px.
+- **Konsolidacja** — hamburger, oba chevrony (panel decyzji, chip licytacji), flaga
+  zgłoszenia błędu i ikona „Udostępnij" z instrukcji iOS przeniesione do wspólnego
+  zestawu zamiast powtarzanych `<svg>` w plikach.
+
+**Decyzja techniczna — inline zamiast sprite'a.** Pierwotna notatka zakładała
+`<use href="/icons.svg#…">`, ale opierała się na nieistniejącym sprite (patrz sprostowanie
+poniżej). Skoro trzeba było zaczynać od zera, wygrał zapis zgodny z resztą kodu — reszta
+ikon też jest inline'owana. Przy okazji: żadnego dodatkowego żądania sieciowego ani pliku
+do cache'owania w service workerze.
+
+**Do rozważenia kiedyś:** `src/assets/react.svg`, `vite.svg` i `hero.png` to również
+pozostałości szablonu — nic ich nie importuje, więc nie trafiają do bundla, ale leżą w repo.
+
+<details><summary>Oryginalne notatki projektowe</summary>
 
 **Cel:** zastąpić część przycisków tekstowych ikonami — czytelniej i oszczędniej miejscowo (zwłaszcza na mobile).
 
@@ -108,7 +133,10 @@ kategoria, zgłaszający, data), żeby dało się odnaleźć rozdanie.
 
 **Zasada:** ikona bez etykiety tekstowej musi mieć `aria-label` + najlepiej tooltip (`title`). Nie psuć dostępności ani układu mobilnego.
 
-**Decyzja do podjęcia:** które konkretnie przyciski na ikony (minimalnie: Wyloguj + Zgłoś błąd), żeby nie rozjechać spójności.
+**Decyzja podjęta (2026-07-30):** ControlPanel (najpilniejsze) + Wyloguj + ikonki przy
+Mój panel / Admin. Zgłoszenie błędu dostało flagę już przy realizacji punktu 2.
+
+</details>
 
 ---
 
