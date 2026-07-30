@@ -76,5 +76,9 @@ export function useDealTimer({ enabled, phase, limitSeconds, resetKey, onExpire 
   }, [active]);
 
   const visible = enabled && started && !finished;
-  return { remaining, visible };
+  // `expired` wychodzi na zewnątrz, bo o wyniku decyduje teraz nie użytkownik, tylko
+  // zegar: wyzerowanie zalicza rozdanie jako błąd. RESTART świadomie tego nie kasuje —
+  // sygnatura biegu nie zależy od fazy, więc powrót na początek nie daje świeżego czasu
+  // (rozwiązanie i tak zostało już pokazane).
+  return { remaining, visible, expired };
 }

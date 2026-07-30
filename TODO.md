@@ -15,11 +15,22 @@ Stan na: 2026-06-25.
 
 - **Opt-in:** przełącznik w „Mój panel → Ustawienia nauki" (kolumna `profiles.timed_mode`, zapis przez `update_my_settings`). Domyślnie wyłączony.
 - **Start:** wejście w fazę `decision`. **Bez pauzy** — biegnie też przy przeglądaniu lew wstecz (POPRZEDNI).
-- **Po zerze:** automatyczne odsłonięcie rozwiązania (`revealSolution`); użytkownik i tak sam ocenia.
+- **Po zerze (od 2026-07-30):** rozwiązanie odsłania się automatycznie **i rozdanie jest
+  zaliczane jako błąd** — samoocena znika, zostaje komunikat „Czas minął — zaliczone jako
+  błąd" i przycisk „Dalej", który zapisuje wynik negatywny (`handleRate(false)`, w sesji
+  `session.answer(false)`). Wcześniej zero tylko odsłaniało rozwiązanie, a użytkownik i tak
+  mógł kliknąć „Dobrze", więc przeczekanie czasu było bez konsekwencji.
+  - Ręczne kliknięcie „Pokaż pełne rozwiązanie" **przed** zerem zatrzymuje zegar i zostawia
+    normalną samoocenę — świadoma decyzja użytkownika, nie porażka na czas.
+  - RESTART po wyzerowaniu nie daje świeżego czasu (sygnatura biegu nie zależy od fazy),
+    więc nie da się w ten sposób wyzerować porażki.
+  - Bez migracji: zapisujemy wynik, nie czas.
 - **UI:** dyskretny licznik mono w rogu stołu ([src/components/DealTimer.tsx](src/components/DealTimer.tsx)); ostatnie 10 s na bursztynowo.
 - **Pliki:** [src/hooks/useDealTimer.ts](src/hooks/useDealTimer.ts), [src/components/DealTimer.tsx](src/components/DealTimer.tsx), [src/App.tsx](src/App.tsx) (`TrainerApp`), [src/hooks/useSettings.ts](src/hooks/useSettings.ts), [src/components/UserPanel.tsx](src/components/UserPanel.tsx), [src/auth/AuthContext.tsx](src/auth/AuthContext.tsx), typy + [supabase/migrations/0002_timed_mode.sql](supabase/migrations/0002_timed_mode.sql).
 - **⚠️ Wdrożenie:** uruchomić `0002_timed_mode.sql` w Supabase SQL Editor **przed** deployem (dodaje kolumnę + nową sygnaturę RPC).
-- **Odłożone (możliwe rozszerzenia):** zapis realnego czasu do `Attempt`/historii i średnia w panelu; użycie czasu jako sygnału SRS.
+- **Odrzucone (2026-07-30):** zapis realnego czasu do `Attempt`/historii i średnia w panelu.
+  Wymagałoby migracji, a sam wynik na czas wystarcza. Użycie czasu jako sygnału SRS pozostaje
+  odłożone — zachęca do pośpiechu.
 
 <details><summary>Oryginalne notatki projektowe (przed realizacją)</summary>
 

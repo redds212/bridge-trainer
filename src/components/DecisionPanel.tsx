@@ -9,6 +9,8 @@ interface Props {
   onReveal: () => void;
   onCorrect: () => void;
   onWrong: () => void;
+  /** Czas w trybie na czas dobiegł zera — wynik jest przesądzony, nie ma samooceny. */
+  timedOut?: boolean;
 }
 
 function Chevron({ up }: { up: boolean }) {
@@ -21,7 +23,7 @@ function Chevron({ up }: { up: boolean }) {
 const SHORT_VIEWPORT = '(max-height: 500px)';
 const startsExpanded = () => !window.matchMedia(SHORT_VIEWPORT).matches;
 
-export function DecisionPanel({ phase, prompt, solutionText, onReveal, onCorrect, onWrong }: Props) {
+export function DecisionPanel({ phase, prompt, solutionText, onReveal, onCorrect, onWrong, timedOut }: Props) {
   // Na telefonie tekst i diagram konkurują o ten sam ekran: rozwinięty opis zostawia
   // filcowi ~225 px, przez co figury schodzą do ~8 px. Dlatego panel da się zwinąć do
   // paska — czytasz treść, zwijasz, analizujesz rozdanie w pełnej skali. Na desktopie
@@ -69,7 +71,22 @@ export function DecisionPanel({ phase, prompt, solutionText, onReveal, onCorrect
       </div>
 
       <div className="flex-shrink-0 px-4 pb-3 pt-2 md:px-6 md:pb-5">
-        {!revealed ? (
+        {revealed && timedOut ? (
+          // Po zerze nie ma „jak Ci poszło" — wynik jest już przesądzony. Zostaje
+          // przeczytanie rozwiązania i przejście dalej; klik zapisuje błąd.
+          <>
+            <div className="mb-2 flex items-center justify-center gap-2 text-sm font-semibold text-red-300">
+              <span>⏱</span>
+              <span>Czas minął — zaliczone jako błąd</span>
+            </div>
+            <button
+              onClick={onWrong}
+              className="h-11 w-full rounded-[9px] border border-red-700 bg-red-900/70 text-sm font-semibold text-red-200 transition-colors hover:bg-red-800 md:mx-auto md:block md:w-auto md:px-8"
+            >
+              Dalej
+            </button>
+          </>
+        ) : !revealed ? (
           <button
             onClick={onReveal}
             className="h-11 w-full rounded-[9px] bg-brand-accent font-display text-sm font-bold text-brand-btn-text shadow-lg shadow-black/30 transition-colors hover:bg-brand-accent-soft md:mx-auto md:block md:w-auto md:px-8"

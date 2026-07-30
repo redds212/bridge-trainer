@@ -302,6 +302,7 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
               onReveal={revealSolution}
               onCorrect={() => handleRate(true)}
               onWrong={() => handleRate(false)}
+              timedOut={timer.expired}
             />
           </>
         )}
