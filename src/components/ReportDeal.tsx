@@ -5,6 +5,13 @@ import { supabase } from '../lib/supabase';
 import { Icon } from './Icon';
 
 const MAX_MESSAGE = 800;
+/**
+ * Górna granica czekania na zapis. Modal jest w tym czasie zablokowany, żeby wynik
+ * wysyłki nie przepadł — bez limitu zawieszone żądanie uwięziłoby użytkownika
+ * w okienku bez wyjścia. `AbortController` zamiast `AbortSignal.timeout()`, bo to
+ * drugie wymaga iOS 16+, a aplikacja celuje też w starsze iPhone'y.
+ */
+const SEND_TIMEOUT_MS = 15000;
 
 /**
  * Zgłaszanie błędu w rozdaniu — zapis do tabeli `deal_reports`, przeglądany
@@ -33,22 +40,39 @@ export function ReportDealButton({ deal }: { deal: Deal }) {
     setError(null);
   };
 
+  /** Zamknięcie zablokowane w trakcie wysyłki — inaczej wynik przepadał bez śladu. */
+  const requestClose = () => {
+    if (phase !== 'sending') close();
+  };
+
   const send = async () => {
     if (!user) return;
     setPhase('sending');
     setError(null);
-    const { error: err } = await supabase.from('deal_reports').insert({
-      deal_id: deal.id,
-      deal_title: deal.title,
-      user_id: user.id,
-      reporter_label: `${user.username} (${user.email})`,
-      message: message.trim(),
-    });
+
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), SEND_TIMEOUT_MS);
+    const { error: err } = await supabase
+      .from('deal_reports')
+      .insert({
+        deal_id: deal.id,
+        deal_title: deal.title,
+        user_id: user.id,
+        reporter_label: `${user.username} (${user.email})`,
+        message: message.trim(),
+      })
+      .abortSignal(ctrl.signal);
+    clearTimeout(timeout);
+
     if (err) {
       setPhase('form');
-      setError(err.message.toLowerCase().includes('fetch')
-        ? 'Brak połączenia — spróbuj ponownie, gdy wróci sieć.'
-        : err.message);
+      setError(
+        ctrl.signal.aborted
+          ? 'Wysyłka trwała zbyt długo. Sprawdź połączenie i spróbuj ponownie.'
+          : err.message.toLowerCase().includes('fetch')
+            ? 'Brak połączenia — spróbuj ponownie, gdy wróci sieć.'
+            : err.message,
+      );
       return;
     }
     setPhase('sent');
@@ -66,7 +90,7 @@ export function ReportDealButton({ deal }: { deal: Deal }) {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={close}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={requestClose}>
           <div
             className="slide-up w-full max-w-sm rounded-2xl border border-brand-line bg-brand-panel p-5 shadow-2xl"
             onClick={e => e.stopPropagation()}
@@ -112,8 +136,9 @@ export function ReportDealButton({ deal }: { deal: Deal }) {
 
                 <div className="flex gap-2">
                   <button
-                    onClick={close}
-                    className="h-11 flex-1 rounded-[9px] border border-brand-line bg-brand-soft text-sm font-medium text-brand-text transition-colors hover:bg-brand-line/60"
+                    onClick={requestClose}
+                    disabled={phase === 'sending'}
+                    className="h-11 flex-1 rounded-[9px] border border-brand-line bg-brand-soft text-sm font-medium text-brand-text transition-colors hover:bg-brand-line/60 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Anuluj
                   </button>

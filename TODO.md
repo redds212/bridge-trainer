@@ -178,7 +178,7 @@ urządzeń i czy sesja dzienna ma się dać rozpocząć offline.
 ## 5. Przegląd kodu z 2026-07-30 — znalezione błędy i nieścisłości
 
 Przegląd zmian z tej sesji (PWA, losowanie sesji, ikony, zgłoszenia, tryb na czas).
-**Stan: A, B, C, E, F, G naprawione; D zostaje otwarte.**
+**Stan: wszystkie znaleziska (A–G) naprawione.**
 
 **⚠️ Wdrożenie:** poprawki C, E i F wymagają uruchomienia
 [0009_deal_reports_fixes.sql](supabase/migrations/0009_deal_reports_fixes.sql).
@@ -234,14 +234,18 @@ BEFORE, bo po akcji klucza obcego `user_id` byłby już NULL i nie dałoby się 
 wierszy. Trigger, a nie zmiana w `delete-user`, żeby złapać też usunięcia zrobione
 poza aplikacją. Klient i tak mapuje pusty `reporter_label` na „(konto usunięte)”.
 
-### D. Zamknięcie modala w trakcie wysyłki gubi wynik — ⬜ OTWARTE
+### D. Zamknięcie modala w trakcie wysyłki gubi wynik — ✅ NAPRAWIONE
 
 W [ReportDeal.tsx](src/components/ReportDeal.tsx) tło modala zamyka go także podczas
 `phase === 'sending'`. `close()` ustawia fazę na `form`, ale trwający `insert` po powrocie
 ustawia `sent` przy zamkniętym oknie. Przy następnym otwarciu użytkownik widzi „Zgłoszenie
 wysłane", choć niczego nie napisał — a przy błędzie nie dowie się, że wysyłka padła.
 
-Kierunek naprawy: blokada zamykania w trakcie wysyłki albo ignorowanie odpowiedzi po zamknięciu.
+**Naprawiono:** zamykanie zablokowane na czas wysyłki (tło i „Anuluj”), plus twardy limit
+15 s przez `AbortController` — sama blokada nie wystarczała, bo zawieszone żądanie
+uwięziłoby użytkownika w okienku bez wyjścia. Po przekroczeniu limitu wraca formularz
+z komunikatem o zbyt długiej wysyłce i wpisaną treścią, więc nic nie przepada.
+`AbortController` zamiast `AbortSignal.timeout()`, bo to drugie wymaga iOS 16+.
 
 ### E. Brak ograniczenia długości zgłoszenia w bazie — ✅ NAPRAWIONE (0009)
 
