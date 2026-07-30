@@ -45,7 +45,26 @@ Stan na: 2026-06-25.
 
 ---
 
-## 2. Opcja zgłoszenia błędu w rozdaniu
+## 2. Opcja zgłoszenia błędu w rozdaniu — ✅ ZROBIONE (wariant `mailto`)
+
+**Zrealizowany wariant (2026-07-30):** ikona flagi w lewym dolnym rogu filcu →
+modal z krótką wiadomością → `mailto:kontakt@bridgeloop.pl` z prewypełnionym tematem
+i treścią. Do wiadomości doklejane są dane techniczne (tytuł, `dealId`, kontrakt,
+kategoria, zgłaszający, data), żeby dało się odnaleźć rozdanie.
+
+- **Pliki:** [src/components/ReportDeal.tsx](src/components/ReportDeal.tsx); przycisk
+  wstrzykiwany do [BridgeTable](src/components/BridgeTable.tsx) propsem `report`
+  (tak samo jak `timer`), żeby stół nie zależał od `useAuth` i nie psuł harnessu
+  `?preview=table`.
+- **Świadomy kompromis:** zgłoszenia lądują w skrzynce, nie w aplikacji. Brak tabeli
+  `deal_reports`, brak przeglądu w panelu admina, brak statusów. Jeśli zgłoszeń będzie
+  dużo, wróć do wariantu z bazą (notatki poniżej zostają aktualne).
+- **Ograniczenie `mailto`:** nie wysyła wiadomości, tylko otwiera klienta pocztowego
+  z gotowym szkicem — użytkownik musi go u siebie wysłać. Na komputerze bez
+  skonfigurowanego klienta nie stanie się nic, dlatego w modalu jest też kopiowanie
+  treści do schowka i adres wypisany wprost.
+
+<details><summary>Oryginalne notatki projektowe (wariant z tabelą — nadal aktualne, gdyby wracać)</summary>
 
 **Cel:** użytkownik może zgłosić błąd w konkretnym rozdaniu (zła licytacja, zły układ kart, błąd w rozwiązaniu).
 
@@ -63,7 +82,9 @@ Stan na: 2026-06-25.
 
 **Fallback bez backendu (gdyby Supabase miało być później):** `mailto:kontakt@bridgeloop.pl` z prewypełnionym tematem zawierającym `dealId`. Szybkie do wdrożenia, ale bez panelu admina.
 
-**Decyzja do podjęcia:** pełna tabela + panel admina vs. szybki `mailto`.
+**Decyzja podjęta (2026-07-30):** szybki `mailto`.
+
+</details>
 
 ---
 

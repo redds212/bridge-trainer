@@ -160,9 +160,11 @@ interface Props {
   state: GameState;
   /** Licznik trybu na czas — na telefonie w pasku chipów, na desktopie nad filcem. */
   timer?: ReactNode;
+  /** Zgłaszanie błędu — wstrzykiwane z zewnątrz, żeby stół nie zależał od auth. */
+  report?: ReactNode;
 }
 
-export function BridgeTable({ deal, state, timer }: Props) {
+export function BridgeTable({ deal, state, timer, report }: Props) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const playedBySeat = buildPlayedBySeat(state);
   const knownVoids = buildKnownVoids(state);
@@ -235,6 +237,10 @@ export function BridgeTable({ deal, state, timer }: Props) {
         <div className="absolute right-3 top-3 z-10 hidden w-64 md:block">
           <BiddingTable bidding={deal.bidding} dealer={deal.dealer} bidAlerts={deal.bidAlerts} />
         </div>
+
+        {/* Lewy dolny róg filcu — jedyny narożnik wolny na obu układach (prawy dolny
+            zajmuje ContractBox na desktopie). Pod arkuszem licytacji (z-20). */}
+        {report && <div className="absolute bottom-2 left-2 z-10">{report}</div>}
 
         <div className="absolute bottom-3 right-3 z-10 hidden md:block">
           <ContractBox

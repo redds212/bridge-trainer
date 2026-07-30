@@ -19,6 +19,7 @@ import { DecisionPanel } from './components/DecisionPanel';
 import { DealTimer } from './components/DealTimer';
 import { SessionBar } from './components/SessionBar';
 import { InstallBanner } from './components/InstallPrompt';
+import { ReportDealButton } from './components/ReportDeal';
 
 type View = 'trainer' | 'admin' | 'panel';
 
@@ -277,6 +278,7 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
                 deal={selectedDeal}
                 state={state}
                 timer={<DealTimer remaining={timer.remaining} limit={timerLimit} visible={timer.visible} />}
+                report={<ReportDealButton deal={selectedDeal} />}
               />
             </div>
 
