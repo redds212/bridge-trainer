@@ -3,6 +3,14 @@ export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
+      screens: {
+        // `md:` znaczy „jest miejsce na układ desktopowy", a nie tylko „szeroko".
+        // Telefon w poziomie ma 812 px szerokości, ale 375 px wysokości — układ
+        // desktopowy (tabela licytacji, ContractBox, pt-16 nad filcem) ściskał tam
+        // stół do ~80 px i przycinał ręce N/S. Poniżej 500 px wysokości wracamy do
+        // układu mobilnego: chipy + arkusz, czyli tego, co się skaluje do miejsca.
+        md: { raw: '(min-width: 768px) and (min-height: 500px)' },
+      },
       colors: {
         felt: '#1a6b3c',
         'felt-dark': '#145730',

@@ -22,6 +22,10 @@ export default defineConfig(() => ({
         // cache'ujemy Supabase (auth, rozdania) — to zawsze idzie po sieci, żeby
         // nie serwować nieświeżych danych ani nie psuć logowania.
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,json}'],
+        // Zrzuty z manifestu czyta tylko przeglądarka, pokazując dialog instalacji —
+        // aplikacja nigdy o nie nie prosi. W precache'u byłoby to pół megabajta
+        // ściągane przy pierwszym wejściu bez żadnego pożytku dla użytkownika.
+        globIgnores: ['screenshots/**'],
         navigateFallback: '/index.html',
         cleanupOutdatedCaches: true,
         clientsClaim: true,

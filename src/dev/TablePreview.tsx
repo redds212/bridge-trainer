@@ -41,7 +41,7 @@ export function TablePreview() {
         </button>
       </div>
 
-      <div className="relative flex min-h-[240px] flex-1 flex-col p-2 md:min-h-0 md:p-3">
+      <div className="relative flex min-h-[min(240px,35dvh)] flex-1 flex-col p-2 md:min-h-0 md:p-3">
         <BridgeTable
           deal={deal}
           state={state}

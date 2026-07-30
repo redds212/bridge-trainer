@@ -18,6 +18,7 @@ import { ControlPanel } from './components/ControlPanel';
 import { DecisionPanel } from './components/DecisionPanel';
 import { DealTimer } from './components/DealTimer';
 import { SessionBar } from './components/SessionBar';
+import { InstallBanner } from './components/InstallPrompt';
 
 type View = 'trainer' | 'admin' | 'panel';
 
@@ -30,7 +31,7 @@ export default function App() {
 }
 
 function AppShell() {
-  const { user, loading } = useAuth();
+  const { user, loading, offline, refreshProfile } = useAuth();
   const [view, setView] = useState<View>('trainer');
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -51,6 +52,9 @@ function AppShell() {
 
   if (loading) return <LoadingScreen />;
   if (!user) return <LoginPage />;
+  // Przed sprawdzeniem statusu: offline nie zna prawdziwego `status`, więc bez tego
+  // brak sieci udawałby konto czekające na akceptację.
+  if (offline) return <OfflineScreen onRetry={refreshProfile} />;
   if (user.status !== 'approved') return <PendingScreen username={user.username} />;
   if (srs.loading || history.loading || dealsHook.loading) return <LoadingScreen />;
 
@@ -223,9 +227,18 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
         />
       </div>
 
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Mobile top bar with hamburger */}
-        <div className="md:hidden flex items-center gap-3 px-3 py-2 bg-brand-panel border-b border-brand-line flex-shrink-0">
+      {/* Wcięcia boczne: w trybie standalone przy `viewport-fit=cover` treść sięga
+          krawędzi ekranu, więc w poziomie notch zjadałby brzeg filcu. */}
+      <div
+        className="flex-1 flex flex-col min-w-0 overflow-hidden"
+        style={{ paddingLeft: 'env(safe-area-inset-left)', paddingRight: 'env(safe-area-inset-right)' }}
+      >
+        {/* Mobile top bar with hamburger — pasek statusu iOS nakłada się na treść
+            (`black-translucent`), więc górne wcięcie jest tu obowiązkowe. */}
+        <div
+          className="md:hidden flex items-center gap-3 px-3 py-2 bg-brand-panel border-b border-brand-line flex-shrink-0"
+          style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}
+        >
           <button onClick={() => setSidebarOpen(true)} className="text-brand-dim hover:text-brand-text p-1" aria-label="Menu">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
@@ -233,6 +246,8 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
           </button>
           <span className="text-brand-text text-sm font-medium truncate">{selectedDeal?.title ?? 'BridgeLoop'}</span>
         </div>
+
+        <InstallBanner />
 
         {session.active && session.progress && (
           <SessionBar progress={session.progress} onCancel={session.cancel} />
@@ -254,8 +269,10 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
           />
         ) : (
           <>
-            {/* min-h: podłoga dla diagramu — rozwinięty opis nie zgniata go poniżej czytelności */}
-            <div className="relative flex-1 min-h-[240px] p-2 flex flex-col md:min-h-0 md:p-3">
+            {/* min-h: podłoga dla diagramu — rozwinięty opis nie zgniata go poniżej
+                czytelności. Podłoga jest względna, bo na ekranie 375 px wysokości
+                (telefon w poziomie) sztywne 240 px wypychało dok i panel poza ekran. */}
+            <div className="relative flex-1 min-h-[min(240px,35dvh)] p-2 flex flex-col md:min-h-0 md:p-3">
               <BridgeTable
                 deal={selectedDeal}
                 state={state}
@@ -398,6 +415,41 @@ function LoadingScreen() {
     <div className="min-h-screen bg-brand-bg flex flex-col items-center justify-center gap-4">
       <div className="animate-pulse"><LoopMark size={56} /></div>
       <div className="text-brand-dim text-sm">Ładowanie…</div>
+    </div>
+  );
+}
+
+/**
+ * Rozdania, postępy SRS i historia mieszkają wyłącznie w Supabase, a service worker
+ * cache'uje tylko powłokę — bez sieci nie ma czego trenować. Mówimy to wprost,
+ * zamiast pokazywać ekran „konto oczekuje na akceptację".
+ */
+function OfflineScreen({ onRetry }: { onRetry: () => Promise<void> }) {
+  const [checking, setChecking] = useState(false);
+
+  const retry = async () => {
+    setChecking(true);
+    await onRetry();
+    setChecking(false);
+  };
+
+  return (
+    <div className="min-h-[100dvh] bg-brand-bg flex items-center justify-center p-4">
+      <div className="bg-brand-panel border border-brand-line rounded-2xl p-8 max-w-md w-full text-center shadow-2xl">
+        <div className="text-5xl mb-4">📡</div>
+        <h2 className="text-brand-text font-bold text-xl mb-2">Brak połączenia</h2>
+        <p className="text-brand-dim text-sm mb-6">
+          Aplikacja się uruchomiła, ale nie może pobrać rozdań ani Twoich postępów —
+          te dane są po stronie serwera. Jesteś nadal zalogowany; wróci sieć, wróci trening.
+        </p>
+        <button
+          onClick={retry}
+          disabled={checking}
+          className="px-5 py-2.5 bg-brand-accent hover:bg-brand-accent-soft disabled:opacity-50 text-brand-btn-text rounded-[9px] text-sm font-display font-bold transition-colors"
+        >
+          {checking ? 'Sprawdzam…' : 'Spróbuj ponownie'}
+        </button>
+      </div>
     </div>
   );
 }

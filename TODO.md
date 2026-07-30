@@ -87,6 +87,25 @@ Stan na: 2026-06-25.
 
 ---
 
+## 4. PWA — co zostało po adaptacji na telefon (2026-07-29)
+
+Zrobione: breakpoint `md:` zależny też od wysokości, wcięcia bezpieczne (góra/boki),
+ekran „Brak połączenia" zamiast fałszywego „konto oczekuje na akceptację",
+ikona maskable, `apple-mobile-web-app-title`, baner + karta „Zainstaluj",
+`screenshots` w manifeście (1290×2796, `form_factor: narrow`, wyłączone z precache'u
+przez `globIgnores` — czyta je tylko przeglądarka w dialogu instalacji).
+
+Zrzuty powstały w DevTools: preset iPhone'a + **Capture screenshot** (nie „full size" —
+ta wersja rozciąga stronę i psuje układ oparty na `100dvh`). Gdyby trzeba je odświeżyć:
+ten sam preset dla wszystkich zrzutów, bo Chrome wymaga jednakowych proporcji, a `sizes`
+musi zgadzać się co do piksela z plikiem.
+
+**Zostało — realny tryb offline (osobny, duży temat).** Dziś service worker cache'uje
+tylko powłokę; rozdania, SRS i historia idą wyłącznie z Supabase, więc bez sieci nie ma
+czego trenować. Pełny offline = cache rozdań w IndexedDB + kolejka ocen synchronizowana
+po powrocie sieci. Do przemyślenia przed kodowaniem: co przy konflikcie zapisu z dwóch
+urządzeń i czy sesja dzienna ma się dać rozpocząć offline.
+
 ## Notatki ogólne
 - Deploy: push na `master` → GitHub Actions ([.github/workflows/deploy.yml](.github/workflows/deploy.yml)) → `bridgeloop.pl`. Praca na branchu `dev`, merge ff do `master`.
 - Po dłuższej przerwie: sprawdzić, czy certyfikat HTTPS dla domeny już się wystawił i włączyć „Enforce HTTPS" w Settings → Pages.

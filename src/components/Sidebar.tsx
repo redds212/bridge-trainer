@@ -45,7 +45,12 @@ export function Sidebar({ deals, selectedId, getEntry, onSelect, onAdmin, onPane
   }, {});
 
   return (
-    <div className="w-64 bg-brand-panel border-r border-brand-line flex flex-col h-full overflow-hidden">
+    // Szuflada sięga krawędzi ekranu (fixed inset-y-0), więc bierze na siebie
+    // górne i lewe wcięcie bezpieczne — na desktopie oba wychodzą 0.
+    <div
+      className="w-64 bg-brand-panel border-r border-brand-line flex flex-col h-full overflow-hidden"
+      style={{ paddingTop: 'env(safe-area-inset-top)', paddingLeft: 'env(safe-area-inset-left)' }}
+    >
       {/* Brand header */}
       <div className="px-4 py-3 flex items-center gap-2.5 border-b border-brand-line">
         <LoopMark size={34} />

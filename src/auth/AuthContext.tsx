@@ -9,6 +9,12 @@ interface RegisterResult extends AuthResult { needsConfirmation?: boolean }
 interface AuthContextValue {
   user: AppUser | null;
   loading: boolean;
+  /**
+   * Sesja jest ważna (leży w localStorage), ale profilu nie dało się pobrać, bo
+   * nie ma sieci. Stan zupełnie inny niż „konto czeka na akceptację" — bez tego
+   * rozróżnienia offline wyglądał jak odebranie dostępu.
+   */
+  offline: boolean;
   login: (email: string, password: string) => Promise<AuthResult>;
   register: (email: string, username: string, password: string) => Promise<RegisterResult>;
   logout: () => Promise<void>;
@@ -32,41 +38,73 @@ function mapAuthError(message: string): string {
   return message;
 }
 
-async function loadProfile(session: Session | null): Promise<AppUser | null> {
-  if (!session?.user) return null;
+/**
+ * Odróżnia „zapytanie nie doleciało" od „baza odpowiedziała, ale bez wiersza".
+ * supabase-js opakowuje błąd fetcha w PostgrestError, więc zostaje treść komunikatu;
+ * każda przeglądarka nazywa to inaczej.
+ */
+function isNetworkError(message: string): boolean {
+  const m = message.toLowerCase();
+  return m.includes('failed to fetch')  // Chrome / Edge
+    || m.includes('load failed')        // Safari
+    || m.includes('networkerror')       // Firefox
+    || m.includes('fetch failed');
+}
+
+interface ProfileLoad {
+  user: AppUser | null;
+  offline: boolean;
+}
+
+async function loadProfile(session: Session | null): Promise<ProfileLoad> {
+  if (!session?.user) return { user: null, offline: false };
   const authId = session.user.id;
   const email = session.user.email ?? '';
+  const fallback: AppUser = {
+    id: authId, email,
+    username: email.split('@')[0] || 'użytkownik',
+    isAdmin: false, status: 'pending', dailyTarget: 10, mode: 'balanced', timedMode: false,
+  };
+
   const { data, error } = await supabase
     .from('profiles')
     .select('username, is_admin, status, daily_target, mode, timed_mode')
     .eq('id', authId)
     .single();
 
+  // Brak sieci: zwracamy zastępczy profil TYLKO po to, żeby aplikacja wiedziała,
+  // kto jest zalogowany. O tym, co zobaczy użytkownik, decyduje flaga `offline`.
+  if (error && (!navigator.onLine || isNetworkError(error.message))) {
+    return { user: fallback, offline: true };
+  }
+
   if (error || !data) {
     // Profile may not be readable yet (e.g. trigger race right after signup).
-    return {
-      id: authId, email,
-      username: email.split('@')[0] || 'użytkownik',
-      isAdmin: false, status: 'pending', dailyTarget: 10, mode: 'balanced', timedMode: false,
-    };
+    return { user: fallback, offline: false };
   }
   return {
-    id: authId, email,
-    username: data.username ?? email.split('@')[0] ?? 'użytkownik',
-    isAdmin: !!data.is_admin,
-    status: (data.status === 'approved' ? 'approved' : 'pending'),
-    dailyTarget: data.daily_target ?? 10,
-    mode: (data.mode ?? 'balanced') as LearningMode,
-    timedMode: data.timed_mode ?? false,
+    user: {
+      id: authId, email,
+      username: data.username ?? email.split('@')[0] ?? 'użytkownik',
+      isAdmin: !!data.is_admin,
+      status: (data.status === 'approved' ? 'approved' : 'pending'),
+      dailyTarget: data.daily_target ?? 10,
+      mode: (data.mode ?? 'balanced') as LearningMode,
+      timedMode: data.timed_mode ?? false,
+    },
+    offline: false,
   };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [offline, setOffline] = useState(false);
 
   const applySession = useCallback(async (session: Session | null) => {
-    setUser(await loadProfile(session));
+    const { user: profile, offline: isOffline } = await loadProfile(session);
+    setUser(profile);
+    setOffline(isOffline);
   }, []);
 
   useEffect(() => {
@@ -113,8 +151,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await applySession(data.session);
   }, [applySession]);
 
+  // Powrót sieci sam ściąga profil — użytkownik nie musi klikać „Spróbuj ponownie".
+  useEffect(() => {
+    const onOnline = () => { void refreshProfile(); };
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
+  }, [refreshProfile]);
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, resetPassword, refreshProfile }}>
+    <AuthContext.Provider value={{ user, loading, offline, login, register, logout, resetPassword, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

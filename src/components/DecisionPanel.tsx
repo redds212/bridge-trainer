@@ -18,12 +18,18 @@ function Chevron({ up }: { up: boolean }) {
   );
 }
 
+// Telefon w poziomie ma ~375 px wysokości: rozwinięty opis, dok i pasek nie mieszczą
+// się tam razem ze stołem. Poniżej tego progu panel startuje zwinięty — treść jest
+// o jedno stuknięcie dalej, ale diagram zostaje widoczny.
+const SHORT_VIEWPORT = '(max-height: 500px)';
+const startsExpanded = () => !window.matchMedia(SHORT_VIEWPORT).matches;
+
 export function DecisionPanel({ phase, prompt, solutionText, onReveal, onCorrect, onWrong }: Props) {
   // Na telefonie tekst i diagram konkurują o ten sam ekran: rozwinięty opis zostawia
   // filcowi ~225 px, przez co figury schodzą do ~8 px. Dlatego panel da się zwinąć do
   // paska — czytasz treść, zwijasz, analizujesz rozdanie w pełnej skali. Na desktopie
   // (md+) miejsca starczy na jedno i drugie, więc panel jest zawsze rozwinięty.
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(startsExpanded);
 
   // Nowa treść (wejście w decyzję, potem odsłonięcie rozwiązania) zawsze rozwija panel.
   // Reset w trakcie renderu, nie w efekcie — brak dodatkowego przebiegu i migotania.
@@ -31,7 +37,7 @@ export function DecisionPanel({ phase, prompt, solutionText, onReveal, onCorrect
   const [seenKey, setSeenKey] = useState(contentKey);
   if (seenKey !== contentKey) {
     setSeenKey(contentKey);
-    setExpanded(true);
+    setExpanded(startsExpanded());
   }
 
   if (phase === 'intro' || phase === 'rated') return null;

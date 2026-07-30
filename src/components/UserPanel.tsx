@@ -6,6 +6,7 @@ import { todayKey, toDateKey, formatDayKey } from '../lib/date';
 import { DAILY_TARGET_MIN, DAILY_TARGET_MAX } from '../hooks/useSettings';
 import { TIMED_LIMITS, formatClock } from '../hooks/useDealTimer';
 import type { HistoryStats } from '../hooks/useHistory';
+import { InstallCard } from './InstallPrompt';
 
 interface Props {
   deals: Deal[];
@@ -235,6 +236,8 @@ export function UserPanel({
             )}
           </div>
         </section>
+
+        <InstallCard />
 
         {/* Future repeats — expandable */}
         <section className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">

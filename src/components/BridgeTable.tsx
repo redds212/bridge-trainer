@@ -102,8 +102,14 @@ function ScaledBoard({ children }: { children: ReactNode }) {
       const cw = content.offsetWidth;
       const ch = content.offsetHeight;
       if (!cw || !ch) return;
-      const next = Math.min(box.clientWidth / cw, box.clientHeight / ch, 1);
-      if (next > 0) setScale(prev => (Math.abs(prev - next) < 0.005 ? prev : next));
+      // Podłoga skali. Gdy kontener chwilowo ma 0 px wysokości (obrót ekranu,
+      // rozwinięcie panelu decyzji), iloraz wychodził 0 i nie przechodził przez
+      // strażnik `next > 0` — diagram zostawał w poprzedniej, za dużej skali i był
+      // przycinany. Mikroskopijny stół jest złym stanem przejściowym, ale obcięte
+      // ręce N/S to zły stan trwały.
+      const raw = Math.min(box.clientWidth / cw, box.clientHeight / ch, 1);
+      const next = Math.max(raw, 0.05);
+      setScale(prev => (Math.abs(prev - next) < 0.005 ? prev : next));
     };
 
     const ro = new ResizeObserver(measure);
