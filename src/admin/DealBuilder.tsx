@@ -382,11 +382,27 @@ export function DealBuilder({ initialData, isEdit, onSave, onCancel }: Props) {
     setActiveTrick(null); setTrickSeat(null);
   };
 
+  // Punkt decyzji wypada tam, gdzie autor przestał wpisywać — zapisujemy wszystkie
+  // karty, nie samo wyjście. Niepełna lewa nie ma zwycięzcy i dlatego nie liczy się
+  // do wyniku NS/EW (patrz useGameState: wymagany komplet czterech kart).
   const markDecision = () => {
     if (!activeTrick?.cards[activeTrick.leader]) return;
-    const partialCards: Partial<Record<Seat, string>> = { [activeTrick.leader]: activeTrick.cards[activeTrick.leader]! };
-    setSt(prev => ({ ...prev, tricks: [...prev.tricks, { ...activeTrick, cards: partialCards, isDecision: true, winner: undefined }] }));
+    setSt(prev => ({ ...prev, tricks: [...prev.tricks, { ...activeTrick, isDecision: true, winner: undefined }] }));
     setActiveTrick(null); setTrickSeat(null);
+  };
+
+  // Bez tego pomyłkę w karcie naprawia się tylko przez „Anuluj" i wpisanie lewy od nowa.
+  // `winner` znika razem z cofniętą czwartą kartą — inaczej zostałby przycisk „Dodaj lewę"
+  // z nieaktualnym zwycięzcą.
+  const undoCard = () => {
+    if (!activeTrick) return;
+    const played = playOrder(activeTrick.leader).filter(s => activeTrick.cards[s] !== undefined);
+    const last = played[played.length - 1];
+    if (!last) return;
+    const cards = { ...activeTrick.cards };
+    delete cards[last];
+    setActiveTrick({ ...activeTrick, cards, winner: undefined });
+    setTrickSeat(last);
   };
 
   const removeTrick = () => setSt(prev => ({ ...prev, tricks: prev.tricks.slice(0, -1) }));
@@ -886,10 +902,19 @@ export function DealBuilder({ initialData, isEdit, onSave, onCancel }: Props) {
                       ✓ Dodaj lewę — wygrywa {activeTrick.winner}
                     </button>
                   )}
-                  {activeTrick.cards[activeTrick.leader] && (
+                  {/* Przy komplecie czterech kart znacznik znika: zapisałby te same karty
+                      bez zwycięzcy, więc lewa przestałaby się liczyć do NS/EW. Decyzja po
+                      pełnej lewie i tak działa sama — sekwencja po prostu się kończy. */}
+                  {activeTrick.cards[activeTrick.leader] && !activeTrick.winner && (
                     <button onClick={markDecision}
                       className="px-4 py-2 bg-yellow-800/70 hover:bg-yellow-700/70 text-yellow-100 rounded-lg text-sm font-semibold border border-yellow-700 transition-colors">
                       ⚡ Ustaw tu punkt decyzji
+                    </button>
+                  )}
+                  {Object.values(activeTrick.cards).some(Boolean) && (
+                    <button onClick={undoCard}
+                      className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm transition-colors">
+                      ← Cofnij kartę
                     </button>
                   )}
                   <button onClick={cancelTrick}
@@ -901,10 +926,18 @@ export function DealBuilder({ initialData, isEdit, onSave, onCancel }: Props) {
             ) : hasDecision ? (
               <p className="text-sm text-yellow-400/70 italic">Punkt decyzji ustawiony — wypełnij sekcję poniżej.</p>
             ) : (
-              <button onClick={startTrick}
-                className="px-5 py-2.5 bg-blue-700 hover:bg-blue-600 text-white rounded-lg text-sm font-semibold transition-colors">
-                + Dodaj lewę
-              </button>
+              <div className="space-y-2">
+                {st.tricks.length > 0 && (
+                  <p className="text-xs text-slate-500 italic">
+                    Znacznik ⚡ jest potrzebny tylko wtedy, gdy decyzja wypada w środku lewy.
+                    Bez niego gracz decyduje po ostatniej dodanej lewie.
+                  </p>
+                )}
+                <button onClick={startTrick}
+                  className="px-5 py-2.5 bg-blue-700 hover:bg-blue-600 text-white rounded-lg text-sm font-semibold transition-colors">
+                  + Dodaj lewę
+                </button>
+              </div>
             )}
           </Section>
 

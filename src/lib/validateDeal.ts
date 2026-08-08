@@ -80,8 +80,37 @@ export function validateDeal(deal: Deal): DealValidation {
       }
     }
   };
+  // ── kształt sekwencji wstępnej ──────────────────────────────
+  // Niepełna lewa jest legalna wyłącznie jako punkt decyzji, czyli na samym końcu.
+  // W środku sekwencji nie doliczyłaby się do NS/EW (useGameState wymaga kompletu
+  // czterech kart), więc licznik lew rozjechałby się z tym, co gracz widzi na filcu —
+  // a przy nauce rozgrywki licznik jest częścią zadania.
+  //
+  // Reguły dotyczą tylko `introSequence`. `continuationTricks` nie są dziś nigdzie
+  // renderowane, więc zaostrzanie ich blokowałoby import na danych, których nikt nie ogląda.
+  const checkIntroShape = (tricks: TrickStep[]) => {
+    tricks.forEach((trick, i) => {
+      if (!trick.leader) return; // brak wyjściowego łapie checkTrick
+      const label = `Lewa ${trick.trick ?? i + 1}`;
+      const order = clockwiseFrom(trick.leader);
+      const played = order.map(seat => trick.cards?.[seat]);
+      const gap = played.findIndex(card => !card);
+      if (gap !== -1 && played.slice(gap).some(Boolean)) {
+        errors.push(`${label}: karty muszą iść po kolei od wyjściowego (${trick.leader}) — brak karty gracza ${order[gap]}.`);
+      }
+      const count = played.filter(Boolean).length;
+      if (count < 4 && i < tricks.length - 1) {
+        errors.push(`${label}: niepełna lewa (${count}/4) może być tylko ostatnia — punkt decyzji kończy sekwencję.`);
+      }
+      if (count < 4 && trick.winner) {
+        warnings.push(`${label}: niepełna lewa ma wskazanego zwycięzcę (${trick.winner}) — zostanie zignorowany.`);
+      }
+    });
+  };
+
   (deal.introSequence ?? []).forEach((t, i) => checkTrick(t, i + 1));
   (deal.solution?.continuationTricks ?? []).forEach((t, i) => checkTrick(t, i + 1));
+  checkIntroShape(deal.introSequence ?? []);
 
   // ── teaching layer ──────────────────────────────────────────
   if (!deal.introSequence || deal.introSequence.length === 0) {

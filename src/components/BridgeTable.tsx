@@ -10,6 +10,7 @@ import { hasBidding } from '../lib/bidding';
 import { Icon } from './Icon';
 
 const SUITS: Suit[] = ['S', 'H', 'D', 'C'];
+const CLOCKWISE: Seat[] = ['N', 'E', 'S', 'W'];
 
 // Count cards in a rank string, treating "10" as a single card.
 function countRanks(s: string): number {
@@ -59,6 +60,18 @@ function buildPlayedBySeat(state: GameState): Partial<Record<Seat, string[]>> {
     result[seat as Seat] = [...set];
   }
   return result;
+}
+
+// Miejsce, z którego gracz ma zagrać w momencie decyzji: pierwsze bez karty, licząc
+// zegarowo od wyjściowego. Przy pełnej lewie (decyzja po jej zakończeniu) i przy
+// rozdaniu bez sekwencji wstępnej nie ma czego wskazywać.
+function pendingSeat(state: GameState): Seat | null {
+  if (state.phase !== 'decision') return null;
+  const leader = state.currentTrickLeader;
+  if (!leader) return null;
+  const i = CLOCKWISE.indexOf(leader);
+  const order = [...CLOCKWISE.slice(i), ...CLOCKWISE.slice(0, i)];
+  return order.find(seat => !state.visibleTrick[seat]) ?? null;
 }
 
 function buildKnownVoids(state: GameState): Partial<Record<Seat, Set<string>>> {
@@ -276,6 +289,7 @@ export function BridgeTable({ deal, state, timer, report }: Props) {
                 <TrickDisplay
                   visibleTrick={state.visibleTrick as Partial<Record<Seat, string>>}
                   leader={state.currentTrickLeader as Seat | null}
+                  pendingSeat={pendingSeat(state)}
                 />
               </div>
               {hand('E')}
