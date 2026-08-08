@@ -204,6 +204,9 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
       restoreSnapshot(selectedId, base.snapshot);
       lastCorrectRef.current = false;
     }
+    // Wracamy na początek rozdania, więc licznik znika i pokaże się znowu dopiero
+    // w momencie decyzji — jak przy pierwszym przejściu.
+    timer.hideUntilDecision();
     rewind();
   };
 

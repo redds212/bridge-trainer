@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { GamePhase } from '../types';
 
 // Limit czasu (w sekundach) zależny od opanowania rozdania — indeks = consecutiveCorrect.
@@ -31,6 +31,8 @@ interface Options {
  * Odliczanie per rozdanie. Start w chwili wejścia w fazę `decision`; biegnie
  * dalej bez pauzy nawet przy przeglądaniu lew wstecz (POPRZEDNI → faza `intro`).
  * Zatrzymuje się po odsłonięciu rozwiązania/ocenie albo po wyzerowaniu (→ onExpire).
+ * RESTART (`hideUntilDecision`) zdejmuje licznik z ekranu aż do ponownego wejścia
+ * w moment decyzji.
  *
  * Reset i „start" korygują stan w trakcie renderu (wzorzec React na resetowanie
  * stanu przy zmianie propsów) — dzięki temu nie ma migotania między klatkami.
@@ -39,6 +41,9 @@ export function useDealTimer({ enabled, phase, limitSeconds, resetKey, onExpire 
   const [remaining, setRemaining] = useState(limitSeconds);
   const [started, setStarted] = useState(false);
   const [expired, setExpired] = useState(false);
+  // RESTART cofa na początek rozdania, więc licznik schodzi z ekranu i wraca dopiero
+  // przy ponownym wejściu w moment decyzji — tam, gdzie pokazuje się normalnie.
+  const [hidden, setHidden] = useState(false);
   // Sygnatura biegu — jej zmiana oznacza nowe rozdanie / limit / przełączenie trybu.
   const [signature, setSignature] = useState(`${resetKey}|${limitSeconds}|${enabled}`);
 
@@ -50,10 +55,13 @@ export function useDealTimer({ enabled, phase, limitSeconds, resetKey, onExpire 
     setSignature(nextSignature);
     setStarted(false);
     setExpired(false);
+    setHidden(false);
     setRemaining(limitSeconds);
-  } else if (enabled && phase === 'decision' && !started && !expired) {
-    // Zatrzask startu przy pierwszym wejściu w moment decyzji.
-    setStarted(true);
+  } else if (enabled && phase === 'decision') {
+    // Zatrzask startu przy pierwszym wejściu w moment decyzji; każde kolejne
+    // wejście (po RESTARCIE) tylko przywraca licznik na ekran.
+    if (!started && !expired) setStarted(true);
+    if (hidden) setHidden(false);
   }
 
   const finished = phase === 'revealed' || phase === 'rated';
@@ -75,10 +83,16 @@ export function useDealTimer({ enabled, phase, limitSeconds, resetKey, onExpire 
     return () => clearInterval(id);
   }, [active]);
 
-  const visible = enabled && started && !finished;
+  const visible = enabled && started && !finished && !hidden;
+
+  /** RESTART: chowa licznik do ponownego wejścia w moment decyzji. Czas biegnie dalej. */
+  const hideUntilDecision = useCallback(() => setHidden(true), []);
+
   // `expired` wychodzi na zewnątrz, bo o wyniku decyduje teraz nie użytkownik, tylko
   // zegar: wyzerowanie zalicza rozdanie jako błąd. RESTART świadomie tego nie kasuje —
   // sygnatura biegu nie zależy od fazy, więc powrót na początek nie daje świeżego czasu
-  // (rozwiązanie i tak zostało już pokazane).
-  return { remaining, visible, expired };
+  // (rozwiązanie i tak zostało już pokazane). Z tego samego powodu ukrycie licznika nie
+  // jest pauzą: budżet czasu leci dalej w tle, inaczej RESTART dawałby dowolnie długie
+  // zastanowienie przed odpowiedzią.
+  return { remaining, visible, expired, hideUntilDecision };
 }
