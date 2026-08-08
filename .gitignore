@@ -17,6 +17,10 @@ dist-ssr
 .env.*
 !.env.example
 
+# Surowe rozdania z importu — materiał roboczy, do bazy trafiają przez skrypty
+# importujące, nie przez repo.
+imports/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
