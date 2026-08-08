@@ -6,6 +6,7 @@ import { TrickDisplay } from './TrickDisplay';
 import { BiddingTable } from './BiddingTable';
 import { ContractBox } from './ContractBox';
 import { SUIT_COLORS } from '../lib/suitColors';
+import { hasBidding } from '../lib/bidding';
 import { Icon } from './Icon';
 
 const SUITS: Suit[] = ['S', 'H', 'D', 'C'];
@@ -167,6 +168,19 @@ interface Props {
 
 export function BridgeTable({ deal, state, timer, report }: Props) {
   const [sheetOpen, setSheetOpen] = useState(false);
+  const biddingAvailable = hasBidding(deal.bidding);
+
+  // Arkusz nie przeżywa zmiany rozdania. BridgeTable nie dostaje `key`, więc bez
+  // tego dało się przejść z otwartym arkuszem na rozdanie bez licytacji — arkusz
+  // zostawał na ekranie, a chip, którym się go zamyka, był już zablokowany.
+  // Korekta w trakcie renderu, nie w efekcie: React powtarza render od razu, bez
+  // pokazywania stanu pośredniego z arkuszem nad nowym rozdaniem.
+  const [sheetDealId, setSheetDealId] = useState(deal.id);
+  if (sheetDealId !== deal.id) {
+    setSheetDealId(deal.id);
+    setSheetOpen(false);
+  }
+
   const playedBySeat = buildPlayedBySeat(state);
   const knownVoids = buildKnownVoids(state);
   const exhaustedSuits = buildExhaustedSuits(state, playedBySeat);
@@ -194,11 +208,17 @@ export function BridgeTable({ deal, state, timer, report }: Props) {
             zostaje klikalny, kiedy arkusz przykrywa stół. */}
         <button
           onClick={() => setSheetOpen(open => !open)}
-          aria-expanded={sheetOpen}
-          className="ml-auto flex h-9 items-center gap-1 rounded-[7px] border border-brand-line bg-brand-soft px-3 text-[12px] leading-none text-brand-accent-soft"
+          disabled={!biddingAvailable}
+          aria-expanded={biddingAvailable ? sheetOpen : undefined}
+          title={biddingAvailable ? undefined : 'Brak licytacji w tym rozdaniu'}
+          className="ml-auto flex h-9 items-center gap-1 rounded-[7px] border border-brand-line bg-brand-soft px-3 text-[12px] leading-none text-brand-accent-soft disabled:cursor-not-allowed disabled:opacity-30"
         >
           Licytacja
-          <Icon name="chevron-down" size={11} strokeWidth={3} className={sheetOpen ? 'rotate-180' : ''} />
+          {/* Bez licytacji nie ma czego rozwijać — strzałka obiecywałaby akcję,
+              której nie będzie. */}
+          {biddingAvailable && (
+            <Icon name="chevron-down" size={11} strokeWidth={3} className={sheetOpen ? 'rotate-180' : ''} />
+          )}
         </button>
       </div>
 
@@ -265,7 +285,7 @@ export function BridgeTable({ deal, state, timer, report }: Props) {
         </ScaledBoard>
 
         {/* Mobile: arkusz z licytacją — otwierany z chipa, zasłania stół tylko na żądanie */}
-        {sheetOpen && (
+        {sheetOpen && biddingAvailable && (
           <div className="absolute inset-0 z-20 flex flex-col justify-end md:hidden" onClick={() => setSheetOpen(false)}>
             <div className="absolute inset-0 bg-black/50" />
             <div

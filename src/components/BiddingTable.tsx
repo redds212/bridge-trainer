@@ -1,5 +1,6 @@
 import type { Seat, BidAlert, Suit } from '../types';
 import { SUIT_COLORS } from '../lib/suitColors';
+import { hasBidding } from '../lib/bidding';
 
 interface Props {
   bidding: string[][];
@@ -10,6 +11,26 @@ interface Props {
 const SEAT_ORDER: Seat[] = ['W', 'N', 'E', 'S'];
 
 const SUIT_SYM: Record<string, string> = { S: '♠', H: '♥', D: '♦', C: '♣' };
+
+/**
+ * Brak licytacji. Nagłówek zostaje, żeby panel trzymał swoje miejsce i rozmiar
+ * między rozdaniami, a podpis odróżnia „tego rozdania nie zapisano z licytacją"
+ * od „diagram się nie doczytał" — sam wyszarzony prostokąt czyta się jak awaria.
+ */
+function EmptyBidding() {
+  return (
+    <div className="bg-brand-panel rounded-[11px] border border-brand-line overflow-hidden text-xs opacity-40">
+      <div className="grid grid-cols-4 bg-brand-soft">
+        {SEAT_ORDER.map(s => (
+          <div key={s} className="text-center py-1 text-brand-dim font-semibold border-r border-brand-line last:border-0">
+            {s}
+          </div>
+        ))}
+      </div>
+      <div className="border-t border-brand-line py-1 text-center text-brand-dim">brak licytacji</div>
+    </div>
+  );
+}
 
 function bidContent(bid: string) {
   if (bid === 'P' || bid === 'Pass') return <span style={{ color: 'rgba(255,255,255,.45)' }}>Pas</span>;
@@ -40,6 +61,8 @@ function BidCell({ bid, alerted }: { bid: string | null; alerted?: boolean }) {
 }
 
 export function BiddingTable({ bidding, dealer, bidAlerts = [] }: Props) {
+  if (!hasBidding(bidding)) return <EmptyBidding />;
+
   const dealerIdx = SEAT_ORDER.indexOf(dealer);
   const flat = bidding.flat();
   const alertedSet = new Set(bidAlerts.map(a => a.index));
