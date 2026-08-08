@@ -1,6 +1,7 @@
 import type { Deal, SRSEntry, SRSStatus } from '../types';
 import { isReviewDue } from '../hooks/useSRS';
 import { useAuth } from '../auth/AuthContext';
+import { filterDeals } from '../lib/dealSearch';
 import { LoopMark } from './LoopMark';
 import { Icon } from './Icon';
 
@@ -9,6 +10,9 @@ interface Props {
   selectedId: string | null;
   getEntry: (id: string) => SRSEntry;
   onSelect: (id: string) => void;
+  /** Fraza wyszukiwania — stan trzyma `AppShell`, bo używa go też „Następne →". */
+  query: string;
+  onQueryChange: (query: string) => void;
   onAdmin?: () => void;
   onPanel?: () => void;
 }
@@ -36,11 +40,16 @@ const DIFF_COLOR: Record<string, string> = {
   Expert: '#e0524d', // brand-danger (red)
 };
 
-export function Sidebar({ deals, selectedId, getEntry, onSelect, onAdmin, onPanel }: Props) {
+export function Sidebar({ deals, selectedId, getEntry, onSelect, query, onQueryChange, onAdmin, onPanel }: Props) {
   const { user, logout } = useAuth();
+  // Filtr obejmuje wyłącznie listę poniżej: rekomendacje i liczniki w stopce liczą
+  // się z pełnego zbioru, żeby wpisana fraza nie chowała tego, co jest na dziś do
+  // powtórki, ani nie majstrowała przy statystykach (DEAL_SEARCH_PLAN.md, D1).
   const dueToday = deals.filter(d => isReviewDue(getEntry(d.id)));
+  const visible = filterDeals(deals, query);
 
-  const byCategory = deals.reduce<Record<string, Deal[]>>((acc, d) => {
+  // Grupowanie PO filtrowaniu — kategoria bez trafień znika razem z nagłówkiem.
+  const byCategory = visible.reduce<Record<string, Deal[]>>((acc, d) => {
     (acc[d.category] ??= []).push(d);
     return acc;
   }, {});
@@ -131,8 +140,43 @@ export function Sidebar({ deals, selectedId, getEntry, onSelect, onAdmin, onPane
         </div>
       )}
 
+      {/* Wyszukiwarka — zawsze widoczna i POZA kontenerem przewijania, więc zostaje
+          na miejscu, gdy lista jedzie pod nią. Bez autofocusa: na telefonie
+          podnosiłby klawiaturę przy każdym otwarciu szuflady (D8). */}
+      <div className="px-3 pt-2 pb-1.5 flex-shrink-0">
+        <div className="relative">
+          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-brand-dim pointer-events-none">
+            <Icon name="search" size={13} />
+          </span>
+          <input
+            type="text"
+            value={query}
+            onChange={e => onQueryChange(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Escape') onQueryChange(''); }}
+            placeholder="Szukaj rozdania…"
+            aria-label="Szukaj rozdania"
+            className="w-full bg-brand-soft border border-brand-line rounded-[7px] text-brand-text placeholder:text-brand-dim text-xs pl-[30px] pr-7 py-1.5 outline-none focus:border-brand-accent/60 transition-colors"
+          />
+          {query && (
+            <button
+              onClick={() => onQueryChange('')}
+              aria-label="Wyczyść wyszukiwanie"
+              title="Wyczyść"
+              className="absolute right-1 top-1/2 -translate-y-1/2 p-1 text-brand-dim hover:text-brand-text transition-colors"
+            >
+              <Icon name="close" size={12} />
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Deal list by category */}
       <div className="flex-1 overflow-y-auto py-2">
+        {visible.length === 0 && query.trim() && (
+          <div className="px-4 py-3 text-brand-dim text-[11px] leading-relaxed">
+            Brak rozdań pasujących do „{query.trim()}”.
+          </div>
+        )}
         {Object.entries(byCategory).map(([cat, catDeals]) => (
           <div key={cat}>
             <div className="px-4 py-1.5 text-brand-dim text-[10px] font-semibold uppercase tracking-wider">

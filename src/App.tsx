@@ -11,6 +11,7 @@ import { useDealTimer, timeLimitForLevel } from './hooks/useDealTimer';
 import { useHistory } from './hooks/useHistory';
 import { useSettings } from './hooks/useSettings';
 import { useDailySession } from './hooks/useDailySession';
+import { filterDeals } from './lib/dealSearch';
 import { Sidebar } from './components/Sidebar';
 import { LoopMark } from './components/LoopMark';
 import { BridgeTable } from './components/BridgeTable';
@@ -36,6 +37,11 @@ function AppShell() {
   const { user, loading, offline, refreshProfile } = useAuth();
   const [view, setView] = useState<View>('trainer');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Fraza wyszukiwania siedzi tutaj, a nie w `Sidebar`, bo po tym samym zbiorze
+  // chodzi „Następne →" (DEAL_SEARCH_PLAN.md, D4). Skutek uboczny: przeżywa skok
+  // do Admina i z powrotem, bo `AppShell` się nie odmontowuje — pole zostaje
+  // wypełnione, a obok niego jest „✕".
+  const [dealQuery, setDealQuery] = useState('');
 
   const dealsHook = useDeals();
   const userId = user?.id ?? null;
@@ -105,6 +111,8 @@ function AppShell() {
       recordHistory={history.record}
       session={session}
       timedMode={settings.timedMode}
+      dealQuery={dealQuery}
+      onDealQueryChange={setDealQuery}
       onAdmin={user.isAdmin ? () => setView('admin') : undefined}
       onPanel={() => setView('panel')}
     />
@@ -122,11 +130,13 @@ interface TrainerProps {
   recordHistory: (id: string, correct: boolean, phase: 'main' | 'buffer' | 'free') => void;
   session: SessionApi;
   timedMode: boolean;
+  dealQuery: string;
+  onDealQueryChange: (query: string) => void;
   onAdmin?: () => void;
   onPanel: () => void;
 }
 
-function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session, timedMode, onAdmin, onPanel }: TrainerProps) {
+function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session, timedMode, dealQuery, onDealQueryChange, onAdmin, onPanel }: TrainerProps) {
   const { getEntry } = srs;
 
   const selectedDeal = deals.find(d => d.id === selectedId) ?? null;
@@ -211,9 +221,21 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
     rewind();
   };
 
+  // „Następne →" chodzi po tym samym zbiorze, który widać w panelu bocznym
+  // (DEAL_SEARCH_PLAN.md, D5). Bez wpisanej frazy `visibleDeals === deals`, więc
+  // zachowanie jest dokładnie takie jak dotąd.
+  const visibleDeals = filterDeals(deals, dealQuery);
+  const visibleIdx = visibleDeals.findIndex(d => d.id === selectedId);
+  // Gdy bieżące rozdanie wypadło z filtru (fraza zmieniona po wyborze), „następne"
+  // znaczy „pierwsze z aktualnych trafień" — wejście do zbioru zamiast martwego przycisku.
+  const nextDeal = visibleDeals[visibleIdx + 1] ?? null;
+  // Licznik tylko wtedy, gdy filtr działa i bieżące rozdanie faktycznie w nim jest:
+  // nie da się być na pozycji N zbioru, poza którym się stoi (D7).
+  const filterPosition = dealQuery.trim() && visibleIdx >= 0
+    ? `${visibleIdx + 1}/${visibleDeals.length}`
+    : null;
+
   const handleNextDeal = () => {
-    const idx = deals.findIndex(d => d.id === selectedId);
-    const nextDeal = deals[idx + 1];
     if (nextDeal) handleSelect(nextDeal.id);
   };
 
@@ -234,6 +256,8 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
           selectedId={selectedId}
           getEntry={getEntry}
           onSelect={(id) => { handleSelect(id); setSidebarOpen(false); }}
+          query={dealQuery}
+          onQueryChange={onDealQueryChange}
           onAdmin={onAdmin}
           onPanel={onPanel}
         />
@@ -292,7 +316,12 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
             </div>
 
             {!session.active && state.phase === 'rated' && selectedId && (
-              <RatedBanner entry={getEntry(selectedId)} onNext={handleNextDeal} />
+              <RatedBanner
+                entry={getEntry(selectedId)}
+                onNext={handleNextDeal}
+                hasNext={!!nextDeal}
+                filterPosition={filterPosition}
+              />
             )}
 
             <ControlPanel
@@ -393,7 +422,15 @@ function WelcomeScreen({
   );
 }
 
-function RatedBanner({ entry, onNext }: { entry: SRSEntry; onNext: () => void }) {
+interface RatedBannerProps {
+  entry: SRSEntry;
+  onNext: () => void;
+  hasNext: boolean;
+  /** „2/3" przy aktywnym filtrze, inaczej `null` — patrz DEAL_SEARCH_PLAN.md, D7. */
+  filterPosition: string | null;
+}
+
+function RatedBanner({ entry, onNext, hasNext, filterPosition }: RatedBannerProps) {
   const mastered = entry.status === 'MASTERED';
   const nextDate = entry.nextReviewDate
     ? new Date(entry.nextReviewDate).toLocaleDateString('pl-PL', { day: 'numeric', month: 'long' })
@@ -412,11 +449,24 @@ function RatedBanner({ entry, onNext }: { entry: SRSEntry; onNext: () => void })
           ? `⏰ Następna powtórka: ${nextDate}`
           : ''}
       </div>
+      {/* Na końcu zbioru przycisk zostaje, ale wyszarzony: dotąd renderował się
+          aktywny i po prostu nic nie robił. Przy filtrze na 3 trafienia trafia się
+          to bez przerwy, więc martwy przycisk czytałby się jak awaria (D6). */}
       <button
         onClick={onNext}
-        className="text-xs px-3 py-1 bg-brand-soft hover:bg-brand-line/60 text-brand-text rounded-[7px] border border-brand-line transition-colors"
+        disabled={!hasNext}
+        title={hasNext
+          ? undefined
+          : filterPosition
+          ? 'To ostatnie rozdanie pasujące do wyszukiwania'
+          : 'To ostatnie rozdanie na liście'}
+        className={`text-xs px-3 py-1 rounded-[7px] border transition-colors flex-shrink-0 whitespace-nowrap ${
+          hasNext
+            ? 'bg-brand-soft hover:bg-brand-line/60 text-brand-text border-brand-line'
+            : 'bg-brand-soft/40 text-brand-dim border-brand-line/50 cursor-not-allowed'
+        }`}
       >
-        Następne →
+        {filterPosition ? `Następne (${filterPosition}) →` : 'Następne →'}
       </button>
     </div>
   );
