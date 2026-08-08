@@ -10,7 +10,11 @@
  *
  * Cztery pasy to licytacja, nie stan pusty; w tym projekcie i tak nie wystąpią,
  * bo każde rozdanie ma kontrakt i rozgrywającego.
+ *
+ * Puste i białoznakowe wpisy nie liczą się jako odzywki: `[["","","",""]]` to dla
+ * użytkownika dokładnie to samo co brak licytacji (BidCell nic z nich nie rysuje),
+ * więc sam rozmiar tablicy nie wystarcza.
  */
 export function hasBidding(bidding: string[][] | null | undefined): boolean {
-  return Array.isArray(bidding) && bidding.flat().length > 0;
+  return Array.isArray(bidding) && bidding.flat().some(bid => typeof bid === 'string' && bid.trim() !== '');
 }
