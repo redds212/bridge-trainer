@@ -10,7 +10,7 @@ import { useGameState } from './hooks/useGameState';
 import { useDealTimer, timeLimitForLevel } from './hooks/useDealTimer';
 import { useHistory } from './hooks/useHistory';
 import { useSettings } from './hooks/useSettings';
-import { useDailySession } from './hooks/useDailySession';
+import { useDailySession, resumeLabel, type SessionProgress } from './hooks/useDailySession';
 import { filterDeals } from './lib/dealSearch';
 import { Sidebar } from './components/Sidebar';
 import { LoopMark } from './components/LoopMark';
@@ -18,7 +18,7 @@ import { BridgeTable } from './components/BridgeTable';
 import { ControlPanel } from './components/ControlPanel';
 import { DecisionPanel } from './components/DecisionPanel';
 import { DealTimer } from './components/DealTimer';
-import { SessionBar } from './components/SessionBar';
+import { SessionBar, PausedSessionBar } from './components/SessionBar';
 import { InstallBanner } from './components/InstallPrompt';
 import { ReportDealButton } from './components/ReportDeal';
 import { Icon } from './components/Icon';
@@ -50,6 +50,7 @@ function AppShell() {
   const { settings, update: updateSettings } = useSettings(userId);
 
   const session = useDailySession({
+    userId,
     deals: dealsHook.deals,
     store: srs.store,
     settings,
@@ -64,7 +65,7 @@ function AppShell() {
   // brak sieci udawałby konto czekające na akceptację.
   if (offline) return <OfflineScreen onRetry={refreshProfile} />;
   if (user.status !== 'approved') return <PendingScreen username={user.username} />;
-  if (srs.loading || history.loading || dealsHook.loading) return <LoadingScreen />;
+  if (srs.loading || history.loading || dealsHook.loading || session.loading) return <LoadingScreen />;
 
   if (view === 'admin' && user.isAdmin) {
     return (
@@ -93,8 +94,11 @@ function AppShell() {
         updateSettings={updateSettings}
         attempts={history.attempts}
         stats={history.stats}
-        onReplay={(id) => { session.cancel(); setSelectedId(id); setView('trainer'); }}
+        onReplay={(id) => { session.pause(); setSelectedId(id); setView('trainer'); }}
+        pausedSession={session.pausedSession}
+        pausedProgress={session.pausedProgress}
         onStartSession={() => { session.start(); setView('trainer'); }}
+        onResumeSession={() => { session.resume(); setView('trainer'); }}
         onClearHistory={history.clear}
         onResetProgress={async () => { await srs.clearAll(); history.clear(); }}
         onBack={() => setView('trainer')}
@@ -185,8 +189,9 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.sessionToken]);
 
+  // Wyjście do wybranego rozdania nie kasuje sesji — migawka czeka na „Wznów" (D3).
   const handleSelect = (id: string) => {
-    if (session.active) session.cancel();
+    if (session.active) session.pause();
     onSelectId(id);
   };
 
@@ -284,7 +289,11 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
         <InstallBanner />
 
         {session.active && session.progress && (
-          <SessionBar progress={session.progress} onCancel={session.cancel} />
+          <SessionBar progress={session.progress} onPause={session.pause} />
+        )}
+
+        {!session.active && session.pausedProgress && (
+          <PausedSessionBar progress={session.pausedProgress} onResume={session.resume} />
         )}
 
         {session.completed && (
@@ -299,7 +308,9 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
             deals={deals}
             onSelect={handleSelect}
             getEntry={getEntry}
+            pausedProgress={session.pausedProgress}
             onStartSession={() => session.start()}
+            onResumeSession={() => session.resume()}
           />
         ) : (
           <>
@@ -373,14 +384,17 @@ function SessionComplete({ total, onClose }: { total: number; onClose: () => voi
 }
 
 function WelcomeScreen({
-  deals, onSelect, getEntry, onStartSession,
+  deals, onSelect, getEntry, pausedProgress, onStartSession, onResumeSession,
 }: {
   deals: Deal[];
   onSelect: (id: string) => void;
   getEntry: (id: string) => SRSEntry;
+  pausedProgress: SessionProgress | null;
   onStartSession: () => void;
+  onResumeSession: () => void;
 }) {
   const due = deals.filter(d => isReviewDue(getEntry(d.id)));
+  const [confirmRestart, setConfirmRestart] = useState(false);
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-8 text-center gap-6">
@@ -390,17 +404,58 @@ function WelcomeScreen({
           <span className="text-brand-text">Bridge</span><span className="text-brand-accent-soft">Loop</span>
         </h2>
         <p className="text-brand-dim text-sm max-w-md">
-          Rozpocznij dzisiejszą sesję, aby system dobrał rozdania według algorytmu powtórek,
-          albo wybierz rozdanie z listy po lewej.
+          {pausedProgress
+            ? 'Masz przerwaną sesję na dziś — wróć do niej tam, gdzie ją zostawiłeś, albo zacznij od nowa.'
+            : 'Rozpocznij dzisiejszą sesję, aby system dobrał rozdania według algorytmu powtórek, albo wybierz rozdanie z listy po lewej.'}
         </p>
       </div>
 
-      <button
-        onClick={onStartSession}
-        className="px-7 py-3 bg-brand-accent hover:bg-brand-accent-soft text-brand-btn-text font-display font-bold rounded-[9px] text-sm transition-colors shadow-lg shadow-black/30"
-      >
-        ▶ Rozpocznij dzisiejszą sesję
-      </button>
+      {pausedProgress ? (
+        <div className="flex flex-col items-center gap-3">
+          <button
+            onClick={onResumeSession}
+            className="px-7 py-3 bg-brand-accent hover:bg-brand-accent-soft text-brand-btn-text font-display font-bold rounded-[9px] text-sm transition-colors shadow-lg shadow-black/30"
+          >
+            {resumeLabel(pausedProgress)}
+          </button>
+
+          {confirmRestart ? (
+            <div className="flex flex-col items-center gap-2">
+              <span className="text-brand-dim text-xs">
+                Kolejka przepadnie. Wyniki dotychczasowych rozdań zostają w historii i w powtórkach.
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { setConfirmRestart(false); onStartSession(); }}
+                  className="text-xs px-3 py-1.5 bg-brand-soft hover:bg-brand-line/60 text-brand-text rounded-[7px] border border-brand-line transition-colors"
+                >
+                  Tak, od nowa
+                </button>
+                <button
+                  onClick={() => setConfirmRestart(false)}
+                  className="text-xs px-3 py-1.5 text-brand-dim hover:text-brand-text transition-colors"
+                >
+                  Anuluj
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmRestart(true)}
+              className="text-xs text-brand-dim hover:text-brand-text underline underline-offset-4 transition-colors"
+            >
+              Zacznij od nowa
+            </button>
+          )}
+        </div>
+      ) : (
+        <button
+          onClick={onStartSession}
+          className="px-7 py-3 bg-brand-accent hover:bg-brand-accent-soft text-brand-btn-text font-display font-bold rounded-[9px] text-sm transition-colors shadow-lg shadow-black/30"
+        >
+          ▶ Rozpocznij dzisiejszą sesję
+        </button>
+      )}
 
       {due.length > 0 && (
         <div className="bg-brand-soft border border-brand-line rounded-[12px] p-4 max-w-sm w-full">

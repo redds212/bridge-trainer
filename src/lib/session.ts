@@ -17,6 +17,10 @@ export interface DailySession {
   newCount: number;
   /** Due reviews that didn't fit today's limit and roll to a later day. */
   deferredReviewIds: string[];
+  /** Cel dzienny obowiązujący tę kolejkę — po nim poznajemy zmianę ustawień. */
+  target: number;
+  /** Tryb nauki obowiązujący tę kolejkę. */
+  mode: LearningMode;
 }
 
 // New / Review split for the steady state (Section 1).
@@ -82,23 +86,17 @@ export function modeSplit(settings: UserSettings): SessionSplit {
   return { reviewLimit, newLimit: settings.dailyTarget - reviewLimit };
 }
 
-/**
- * Build today's queue of exactly (up to) X slots following the spec hierarchy:
- *   Step 1 — yesterday's misses (retry) first; they eat into the review limit.
- *   Step 2 — standard due reviews up to the review limit; overflow is deferred.
- *            Unused review capacity is handed to new deals.
- *   Step 3 — new (never-attempted) deals fill the rest up to X.
- */
-export function generateDailySession(
-  deals: Deal[],
-  store: SRSStore,
-  settings: UserSettings,
-  now: Date = new Date(),
-): DailySession {
-  const today = todayKey(now);
-  const X = Math.max(0, Math.floor(settings.dailyTarget));
-  const { reviewLimit } = modeSplit(settings);
+interface DuePools {
+  /** Wczorajsze pudła — najwyższy priorytet. */
+  retries: string[];
+  /** Zaplanowane powtórki, najbardziej zaległe pierwsze. */
+  reviews: string[];
+  /** Nigdy nierozwiązane, potasowane ziarnem z daty. */
+  fresh: string[];
+}
 
+/** Pule wg stanu SRS na `today`. Wołane też przy dopychaniu kolejki po zmianie celu. */
+function buildPools(deals: Deal[], store: SRSStore, today: string, now: Date): DuePools {
   const entryOf = (id: string) => normalizeEntry(store[id]);
 
   // Partition the due pool into retries (step 1) and standard reviews (step 2).
@@ -119,43 +117,129 @@ export function generateDailySession(
     return ka < kb ? -1 : ka > kb ? 1 : 0;
   });
 
-  const slots: SessionSlot[] = [];
-
-  // Step 1 — retries (mandatory, highest priority, capped only by X).
-  for (const deal of retries) {
-    if (slots.length >= X) break;
-    slots.push({ dealId: deal.id, kind: 'retry' });
-  }
-
-  // Step 2 — standard reviews up to the review limit; the rest defer.
-  let reviewUsed = slots.length; // retries already consumed review capacity
-  const deferredReviewIds: string[] = [];
-  for (const deal of reviews) {
-    if (slots.length < X && reviewUsed < reviewLimit) {
-      slots.push({ dealId: deal.id, kind: 'review' });
-      reviewUsed++;
-    } else {
-      deferredReviewIds.push(deal.id);
-    }
-  }
-
-  // Step 3 — new deals fill remaining slots up to X. Losujemy z CAŁEJ puli nowych,
-  // zamiast brać pierwsze z brzegu: baza oddaje rozdania posortowane (`is_base`,
-  // potem `created_at`), więc branie po kolei oznaczało w kółko te same, najstarsze
-  // pozycje — zwłaszcza gdy sesja została przerwana i zaczynana od nowa.
-  const used = new Set(slots.map(s => s.dealId));
-  const newPool = deals.filter(d => !used.has(d.id) && entryOf(d.id).status === 'NEW');
-  for (const deal of shuffled(newPool, seededRandom(hashSeed(today)))) {
-    if (slots.length >= X) break;
-    slots.push({ dealId: deal.id, kind: 'new' });
-  }
+  // Losujemy z CAŁEJ puli nowych, zamiast brać pierwsze z brzegu: baza oddaje
+  // rozdania posortowane (`is_base`, potem `created_at`), więc branie po kolei
+  // oznaczało w kółko te same, najstarsze pozycje — zwłaszcza gdy sesja została
+  // przerwana i zaczynana od nowa.
+  const fresh = shuffled(
+    deals.filter(d => entryOf(d.id).status === 'NEW'),
+    seededRandom(hashSeed(today)),
+  );
 
   return {
-    date: today,
+    retries: retries.map(d => d.id),
+    reviews: reviews.map(d => d.id),
+    fresh: fresh.map(d => d.id),
+  };
+}
+
+/**
+ * Dopycha kolejkę do X wg hierarchii ze specyfikacji:
+ *   Krok 1 — wczorajsze pudła (retry); zjadają limit powtórek, ogranicza je tylko X.
+ *   Krok 2 — zaplanowane powtórki do limitu z `modeSplit`; nadmiar się odkłada.
+ *            Niewykorzystany limit powtórek przechodzi na nowe.
+ *   Krok 3 — nowe (nigdy nierozwiązane) wypełniają resztę do X.
+ *
+ * Sloty już obecne w `slots` zostają nietknięte i wykluczają swoje rozdania.
+ * Bez tego wykluczenia dopychanie po zmianie celu (D4) podałoby z powrotem te
+ * same, wciąż zaległe powtórki, które przecież czekają w kolejce.
+ */
+function fillToTarget(slots: SessionSlot[], pools: DuePools, settings: UserSettings): SessionSlot[] {
+  const X = Math.max(0, Math.floor(settings.dailyTarget));
+  const { reviewLimit } = modeSplit(settings);
+
+  const out = [...slots];
+  const queued = new Set(out.map(s => s.dealId));
+  let reviewUsed = out.filter(s => s.kind !== 'new').length;
+
+  const push = (dealId: string, kind: SessionKind) => {
+    out.push({ dealId, kind });
+    queued.add(dealId);
+    if (kind !== 'new') reviewUsed++;
+  };
+
+  for (const id of pools.retries) {
+    if (out.length >= X) break;
+    if (!queued.has(id)) push(id, 'retry');
+  }
+  for (const id of pools.reviews) {
+    if (out.length >= X || reviewUsed >= reviewLimit) break;
+    if (!queued.has(id)) push(id, 'review');
+  }
+  for (const id of pools.fresh) {
+    if (out.length >= X) break;
+    if (!queued.has(id)) push(id, 'new');
+  }
+
+  return out;
+}
+
+/**
+ * Składa `DailySession` z gotowej listy slotów. Liczniki są zawsze przeliczane
+ * ze slotów, żeby migawka wczytana z bazy nie mogła się z nimi rozjechać.
+ */
+export function sessionFromSlots(
+  date: string,
+  slots: SessionSlot[],
+  deferredReviewIds: string[],
+  target: number,
+  mode: LearningMode,
+): DailySession {
+  return {
+    date,
     slots,
     retryCount: slots.filter(s => s.kind === 'retry').length,
     reviewCount: slots.filter(s => s.kind === 'review').length,
     newCount: slots.filter(s => s.kind === 'new').length,
     deferredReviewIds,
+    target,
+    mode,
   };
+}
+
+/** Odłożone = zaległe powtórki, które nie weszły do kolejki. */
+function finish(date: string, slots: SessionSlot[], pools: DuePools, settings: UserSettings): DailySession {
+  const queued = new Set(slots.map(s => s.dealId));
+  return sessionFromSlots(
+    date,
+    slots,
+    pools.reviews.filter(id => !queued.has(id)),
+    Math.max(0, Math.floor(settings.dailyTarget)),
+    settings.mode,
+  );
+}
+
+/** Build today's queue of exactly (up to) X slots. */
+export function generateDailySession(
+  deals: Deal[],
+  store: SRSStore,
+  settings: UserSettings,
+  now: Date = new Date(),
+): DailySession {
+  const today = todayKey(now);
+  const pools = buildPools(deals, store, today, now);
+  return finish(today, fillToTarget([], pools, settings), pools, settings);
+}
+
+/**
+ * Przelicza kolejkę po zmianie celu dziennego albo trybu (SESSION_RESUME_PLAN.md, D4).
+ * Podniesienie celu dopisuje sloty na koniec — najpierw zaległe powtórki, potem
+ * nowe. Obniżenie ucina ogon czekających, ale nigdy poniżej `keepMin`, czyli tego,
+ * co już zrobione. Zwraca `prev` bez zmian, gdy ustawienia zgadzają się z migawką.
+ */
+export function adaptSession(
+  prev: DailySession,
+  keepMin: number,
+  deals: Deal[],
+  store: SRSStore,
+  settings: UserSettings,
+  now: Date = new Date(),
+): DailySession {
+  const target = Math.max(0, Math.floor(settings.dailyTarget));
+  if (target === prev.target && settings.mode === prev.mode) return prev;
+
+  const today = todayKey(now);
+  const pools = buildPools(deals, store, today, now);
+  const keep = Math.max(keepMin, Math.min(prev.slots.length, target));
+  return finish(today, fillToTarget(prev.slots.slice(0, keep), pools, settings), pools, settings);
 }

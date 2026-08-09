@@ -1,6 +1,7 @@
 // Hand-written schema types mirroring supabase/migrations/0001_init.sql.
 // Gives compile-time safety on column names for our Supabase queries.
 import type { Seat, HandData, TrickStep, Solution, AccountStatus, LearningMode, SRSStatus, SourceType, BidAlert } from '../types';
+import type { SessionSlot } from './session';
 
 // NOTE: these are `type` aliases (not interfaces) so they satisfy
 // supabase-js's `Row extends Record<string, unknown>` constraint.
@@ -79,6 +80,23 @@ export type AttemptRow = {
   ts: string;
 };
 
+/** Migawka przerwanej sesji dziennej — jeden wiersz na konto. Patrz 0010_daily_sessions.sql. */
+export type DailySessionRow = {
+  user_id: string;
+  /** Doba lokalna migawki jako "YYYY-MM-DD". */
+  date: string;
+  slots: SessionSlot[];
+  /** Wskaźnik w `slots` (kolumna `idx`, bo `index` to słowo zastrzeżone w SQL). */
+  idx: number;
+  buffer: string[];
+  buffer_index: number;
+  in_buffer: boolean;
+  deferred_review_ids: string[];
+  target: number;
+  mode: LearningMode;
+  updated_at: string;
+};
+
 export type ReportStatus = 'new' | 'seen' | 'resolved';
 
 export type DealReportRow = {
@@ -141,6 +159,12 @@ export interface Database {
         Row: AttemptRow;
         Insert: Insert<AttemptRow, 'id' | 'ts'>;
         Update: Partial<AttemptRow>;
+        Relationships: [];
+      };
+      daily_sessions: {
+        Row: DailySessionRow;
+        Insert: Insert<DailySessionRow, 'slots' | 'idx' | 'buffer' | 'buffer_index' | 'in_buffer' | 'deferred_review_ids' | 'target' | 'mode' | 'updated_at'>;
+        Update: Partial<DailySessionRow>;
         Relationships: [];
       };
       deal_reports: {

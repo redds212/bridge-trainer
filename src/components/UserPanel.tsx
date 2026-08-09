@@ -1,11 +1,12 @@
 import { useMemo, useState, Fragment } from 'react';
 import type { Deal, SRSStore, SRSEntry, UserSettings, Attempt, LearningMode } from '../types';
 import { normalizeEntry } from '../lib/srs';
-import { generateDailySession, modeSplit, MODE_LABELS, MODE_PROPORTIONS } from '../lib/session';
+import { generateDailySession, modeSplit, MODE_LABELS, MODE_PROPORTIONS, type DailySession } from '../lib/session';
 import { todayKey, toDateKey, formatDayKey } from '../lib/date';
 import { DAILY_TARGET_MIN, DAILY_TARGET_MAX } from '../hooks/useSettings';
 import { TIMED_LIMITS, formatClock } from '../hooks/useDealTimer';
 import type { HistoryStats } from '../hooks/useHistory';
+import { resumeLabel, type SessionProgress } from '../hooks/useDailySession';
 import { InstallCard } from './InstallPrompt';
 
 interface Props {
@@ -16,7 +17,11 @@ interface Props {
   attempts: Attempt[];
   stats: HistoryStats;
   onReplay: (dealId: string) => void;
+  /** Wstrzymana migawka na dziś — gdy jest, karta pokazuje ją zamiast świeżego podglądu. */
+  pausedSession: DailySession | null;
+  pausedProgress: SessionProgress | null;
   onStartSession: () => void;
+  onResumeSession: () => void;
   onClearHistory: () => void;
   onResetProgress: () => void | Promise<void>;
   onBack: () => void;
@@ -26,10 +31,12 @@ const MODES: LearningMode[] = ['maintenance', 'balanced', 'intensive'];
 
 export function UserPanel({
   deals, store, settings, updateSettings, attempts, stats,
-  onReplay, onStartSession, onClearHistory, onResetProgress, onBack,
+  onReplay, pausedSession, pausedProgress, onStartSession, onResumeSession,
+  onClearHistory, onResetProgress, onBack,
 }: Props) {
   const [showRepeats, setShowRepeats] = useState(true);
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
+  const [confirmRestart, setConfirmRestart] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetting, setResetting] = useState(false);
 
@@ -47,10 +54,14 @@ export function UserPanel({
 
   const entryOf = (id: string): SRSEntry => normalizeEntry(store[id]);
 
-  const session = useMemo(
+  // Podgląd „na teraz". Przy wstrzymanej sesji NIE wolno go pokazywać: SRS zmienił
+  // się po każdej odpowiedzi, więc świeże generowanie zwróciłoby inną kolejkę niż
+  // ta, do której wracasz (SESSION_RESUME_PLAN.md, D9).
+  const preview = useMemo(
     () => generateDailySession(deals, store, settings),
     [deals, store, settings],
   );
+  const session = pausedSession ?? preview;
   const split = modeSplit(settings);
 
   const masteredCount = useMemo(
@@ -120,14 +131,49 @@ export function UserPanel({
               ↪ {session.deferredReviewIds.length} powtórek przekracza dzienny limit — przesunięte na kolejny dzień.
             </div>
           )}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onStartSession}
-              disabled={session.slots.length === 0}
-              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold rounded-lg text-sm transition-colors shadow"
-            >
-              {session.slots.length ? `Rozpocznij sesję (${session.slots.length})` : 'Brak rozdań na dziś'}
-            </button>
+          <div className="flex items-center gap-3 flex-wrap">
+            {pausedProgress ? (
+              <>
+                <button
+                  onClick={onResumeSession}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg text-sm transition-colors shadow"
+                >
+                  {resumeLabel(pausedProgress)}
+                </button>
+                {confirmRestart ? (
+                  <span className="flex items-center gap-2 text-xs">
+                    <span className="text-slate-400">Kolejka przepadnie.</span>
+                    <button
+                      onClick={() => { setConfirmRestart(false); onStartSession(); }}
+                      className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-lg transition-colors"
+                    >
+                      Tak, od nowa
+                    </button>
+                    <button
+                      onClick={() => setConfirmRestart(false)}
+                      className="text-slate-400 hover:text-white transition-colors"
+                    >
+                      Anuluj
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => setConfirmRestart(true)}
+                    className="text-slate-400 hover:text-white text-xs underline underline-offset-4 transition-colors"
+                  >
+                    Zacznij od nowa
+                  </button>
+                )}
+              </>
+            ) : (
+              <button
+                onClick={onStartSession}
+                disabled={session.slots.length === 0}
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold rounded-lg text-sm transition-colors shadow"
+              >
+                {session.slots.length ? `Rozpocznij sesję (${session.slots.length})` : 'Brak rozdań na dziś'}
+              </button>
+            )}
             {stats.solvedToday > 0 && (
               <span className="text-emerald-400/80 text-xs">Dziś rozwiązano: {stats.solvedToday}</span>
             )}
