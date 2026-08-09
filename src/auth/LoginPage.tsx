@@ -1,11 +1,8 @@
 import { useState, type FormEvent } from 'react';
-import { useAuth } from './AuthContext';
-import { LoopMark } from '../components/LoopMark';
+import { useAuth, MIN_PASSWORD_LENGTH } from './AuthContext';
+import { AuthCard, ErrorNote, InfoNote, inputCls } from './AuthCard';
 
 type Mode = 'login' | 'register' | 'reset';
-
-const inputCls =
-  'w-full bg-brand-soft border border-brand-line rounded-[9px] px-[13px] py-[11px] text-[13px] text-brand-text placeholder:text-[#6b788c] focus:outline-none focus:border-brand-accent transition-colors';
 
 export function LoginPage() {
   const { login, register, resetPassword } = useAuth();
@@ -30,7 +27,7 @@ export function LoginPage() {
         if (error) setError(error);
       } else if (mode === 'register') {
         if (!username.trim()) { setError('Podaj nazwę użytkownika.'); return; }
-        if (password.length < 6) { setError('Hasło musi mieć co najmniej 6 znaków.'); return; }
+        if (password.length < MIN_PASSWORD_LENGTH) { setError(`Hasło musi mieć co najmniej ${MIN_PASSWORD_LENGTH} znaków.`); return; }
         const { error, needsConfirmation } = await register(email, username, password);
         if (error) setError(error);
         else if (needsConfirmation) {
@@ -50,18 +47,8 @@ export function LoginPage() {
   const title = mode === 'login' ? 'Zaloguj się' : mode === 'register' ? 'Utwórz konto' : 'Resetuj hasło';
 
   return (
-    <div
-      className="min-h-[100dvh] overflow-y-auto flex items-center justify-center p-4 bg-brand-bg"
-      style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,.05) 1px, transparent 1px)', backgroundSize: '20px 20px' }}
-    >
-      <div className="w-full max-w-[320px] bg-brand-panel border border-brand-line rounded-[18px] px-6 py-7 shadow-[0_24px_60px_rgba(0,0,0,.5)]">
-        {/* Logo + wordmark */}
-        <div className="flex justify-center mb-3.5">
-          <LoopMark size={54} />
-        </div>
-        <div className="text-center font-display font-bold text-[22px] leading-none tracking-[-0.02em]">
-          <span className="text-brand-text">Bridge</span><span className="text-brand-accent-soft">Loop</span>
-        </div>
+    <AuthCard>
+      <>
         <div className="text-center text-[11px] text-brand-dim mt-2 mb-5">System SRS — nauka przez powtarzanie</div>
 
         {/* Tabs (hidden in reset mode) */}
@@ -111,16 +98,12 @@ export function LoginPage() {
               </div>
               <input type="password" value={password} onChange={e => setPassword(e.target.value)}
                 autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                placeholder={mode === 'register' ? 'Minimum 6 znaków' : '••••••••'} className={inputCls} />
+                placeholder={mode === 'register' ? `Minimum ${MIN_PASSWORD_LENGTH} znaków` : '••••••••'} className={inputCls} />
             </div>
           )}
 
-          {error && (
-            <div className="text-[12px] text-[#ff6b6b] bg-[#e0524d]/10 border border-[#e0524d]/40 rounded-[9px] px-3 py-2">{error}</div>
-          )}
-          {info && (
-            <div className="text-[12px] text-brand-accent-soft bg-brand-accent/10 border border-brand-accent/40 rounded-[9px] px-3 py-2">{info}</div>
-          )}
+          {error && <ErrorNote>{error}</ErrorNote>}
+          {info && <InfoNote>{info}</InfoNote>}
 
           <button type="submit" disabled={loading}
             className="w-full font-display font-bold text-[14px] rounded-[9px] py-3 bg-brand-accent text-brand-btn-text hover:bg-brand-accent-soft transition-colors disabled:opacity-60">
@@ -140,7 +123,7 @@ export function LoginPage() {
             kontakt@bridgeloop.pl
           </a>
         </div>
-      </div>
-    </div>
+      </>
+    </AuthCard>
   );
 }

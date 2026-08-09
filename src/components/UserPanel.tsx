@@ -7,6 +7,7 @@ import { DAILY_TARGET_MIN, DAILY_TARGET_MAX } from '../hooks/useSettings';
 import { TIMED_LIMITS, formatClock } from '../hooks/useDealTimer';
 import type { HistoryStats } from '../hooks/useHistory';
 import { resumeLabel, type SessionProgress } from '../hooks/useDailySession';
+import { ChangePasswordCard } from '../auth/ChangePasswordCard';
 import { InstallCard } from './InstallPrompt';
 
 interface Props {
@@ -282,6 +283,8 @@ export function UserPanel({
             )}
           </div>
         </section>
+
+        <ChangePasswordCard />
 
         <InstallCard />
 

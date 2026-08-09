@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import type { SRSEntry, Deal } from './types';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { LoginPage } from './auth/LoginPage';
+import { ResetPasswordPage } from './auth/ResetPasswordPage';
 import { AdminPanel } from './admin/AdminPanel';
 import { UserPanel } from './components/UserPanel';
 import { useSRS, isReviewDue } from './hooks/useSRS';
@@ -34,7 +35,7 @@ export default function App() {
 }
 
 function AppShell() {
-  const { user, loading, offline, refreshProfile } = useAuth();
+  const { user, loading, offline, recovery, refreshProfile } = useAuth();
   const [view, setView] = useState<View>('trainer');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Fraza wyszukiwania siedzi tutaj, a nie w `Sidebar`, bo po tym samym zbiorze
@@ -61,6 +62,9 @@ function AppShell() {
 
   if (loading) return <LoadingScreen />;
   if (!user) return <LoginPage />;
+  // Przed bramką statusu, bo konto czekające na akceptację też może resetować hasło —
+  // `PendingScreen` nie ma formularza, więc reset kończyłby się tam ślepym zaułkiem.
+  if (recovery) return <ResetPasswordPage />;
   // Przed sprawdzeniem statusu: offline nie zna prawdziwego `status`, więc bez tego
   // brak sieci udawałby konto czekające na akceptację.
   if (offline) return <OfflineScreen onRetry={refreshProfile} />;
