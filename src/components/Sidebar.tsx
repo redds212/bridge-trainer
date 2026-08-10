@@ -1,5 +1,4 @@
 import type { Deal, SRSEntry, SRSStatus } from '../types';
-import { isReviewDue } from '../hooks/useSRS';
 import { useAuth } from '../auth/AuthContext';
 import { filterDeals } from '../lib/dealSearch';
 import { LoopMark } from './LoopMark';
@@ -7,6 +6,8 @@ import { Icon } from './Icon';
 
 interface Props {
   deals: Deal[];
+  /** Dzisiejsza kolejka SRS — najwyżej `dailyTarget` pozycji, w kolejności sesji. */
+  todayDeals: Deal[];
   selectedId: string | null;
   getEntry: (id: string) => SRSEntry;
   onSelect: (id: string) => void;
@@ -40,13 +41,15 @@ const DIFF_COLOR: Record<string, string> = {
   Expert: '#e0524d', // brand-danger (red)
 };
 
-export function Sidebar({ deals, selectedId, getEntry, onSelect, query, onQueryChange, onAdmin, onPanel }: Props) {
+export function Sidebar({ deals, todayDeals, selectedId, getEntry, onSelect, query, onQueryChange, onAdmin, onPanel }: Props) {
   const { user, logout } = useAuth();
   // Filtr obejmuje wyłącznie listę poniżej: rekomendacje i liczniki w stopce liczą
   // się z pełnego zbioru, żeby wpisana fraza nie chowała tego, co jest na dziś do
   // powtórki, ani nie majstrowała przy statystykach (DEAL_SEARCH_PLAN.md, D1).
-  const dueToday = deals.filter(d => isReviewDue(getEntry(d.id)));
   const visible = filterDeals(deals, query);
+  // Puls na kropce znaczy „jest w dzisiejszej kolejce", a nie „zaległe": `isReviewDue`
+  // jest prawdziwe dla każdego rozdania NEW, więc migała cała lista naraz.
+  const plannedIds = new Set(todayDeals.map(d => d.id));
 
   // Grupowanie PO filtrowaniu — kategoria bez trafień znika razem z nagłówkiem.
   const byCategory = visible.reduce<Record<string, Deal[]>>((acc, d) => {
@@ -118,12 +121,12 @@ export function Sidebar({ deals, selectedId, getEntry, onSelect, query, onQueryC
       )}
 
       {/* Due today */}
-      {dueToday.length > 0 && (
+      {todayDeals.length > 0 && (
         <div className="mx-3 my-2 px-3 py-2 bg-brand-soft rounded-[9px]">
           <div className="text-brand-accent-2 text-[10px] font-semibold uppercase tracking-wider mb-1.5">
-            ★ Rekomendowane na dziś ({dueToday.length})
+            ★ Rekomendowane na dziś ({todayDeals.length})
           </div>
-          {dueToday.slice(0, 3).map(d => (
+          {todayDeals.slice(0, 3).map(d => (
             <button
               key={d.id}
               onClick={() => onSelect(d.id)}
@@ -134,8 +137,8 @@ export function Sidebar({ deals, selectedId, getEntry, onSelect, query, onQueryC
               {d.title}
             </button>
           ))}
-          {dueToday.length > 3 && (
-            <div className="text-brand-dim text-[10px] mt-1 pl-2">+{dueToday.length - 3} więcej…</div>
+          {todayDeals.length > 3 && (
+            <div className="text-brand-dim text-[10px] mt-1 pl-2">+{todayDeals.length - 3} więcej…</div>
           )}
         </div>
       )}
@@ -184,7 +187,7 @@ export function Sidebar({ deals, selectedId, getEntry, onSelect, query, onQueryC
             </div>
             {catDeals.map(deal => {
               const entry = getEntry(deal.id);
-              const due = isReviewDue(entry);
+              const planned = plannedIds.has(deal.id);
               const isSelected = selectedId === deal.id;
 
               return (
@@ -197,7 +200,7 @@ export function Sidebar({ deals, selectedId, getEntry, onSelect, query, onQueryC
                 >
                   {/* SRS dot */}
                   <div className="mt-1 flex flex-col items-center gap-0.5">
-                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT[entry.status]} ${due && entry.status !== 'MASTERED' ? 'animate-pulse' : ''}`} />
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT[entry.status]} ${planned ? 'animate-pulse' : ''}`} />
                   </div>
 
                   {/* Title + meta */}

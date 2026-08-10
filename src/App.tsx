@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import type { SRSEntry, Deal } from './types';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { LoginPage } from './auth/LoginPage';
 import { ResetPasswordPage } from './auth/ResetPasswordPage';
 import { AdminPanel } from './admin/AdminPanel';
 import { UserPanel } from './components/UserPanel';
-import { useSRS, isReviewDue } from './hooks/useSRS';
+import { useSRS } from './hooks/useSRS';
 import { useDeals } from './hooks/useDeals';
 import { useGameState } from './hooks/useGameState';
 import { useDealTimer, timeLimitForLevel } from './hooks/useDealTimer';
@@ -147,6 +147,13 @@ interface TrainerProps {
 function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session, timedMode, dealQuery, onDealQueryChange, onAdmin, onPanel }: TrainerProps) {
   const { getEntry } = srs;
 
+  // Rekomendacje = dzisiejsza kolejka SRS, w jej kolejności. Rozdanie z kolejki może
+  // zniknąć z puli (archiwizacja w Adminie), więc braki wypadają zamiast robić dziury.
+  const todayDeals = useMemo(() => {
+    const byId = new Map(deals.map(d => [d.id, d]));
+    return session.todayQueue.flatMap(id => { const d = byId.get(id); return d ? [d] : []; });
+  }, [deals, session.todayQueue]);
+
   const selectedDeal = deals.find(d => d.id === selectedId) ?? null;
   const { state, next, prev, rewind, revealSolution, setPhase, reset } = useGameState(selectedDeal);
 
@@ -262,6 +269,7 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
       }`}>
         <Sidebar
           deals={deals}
+          todayDeals={todayDeals}
           selectedId={selectedId}
           getEntry={getEntry}
           onSelect={(id) => { handleSelect(id); setSidebarOpen(false); }}
@@ -309,9 +317,8 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
 
         {!selectedDeal || !state ? (
           <WelcomeScreen
-            deals={deals}
+            todayDeals={todayDeals}
             onSelect={handleSelect}
-            getEntry={getEntry}
             pausedProgress={session.pausedProgress}
             onStartSession={() => session.start()}
             onResumeSession={() => session.resume()}
@@ -388,16 +395,15 @@ function SessionComplete({ total, onClose }: { total: number; onClose: () => voi
 }
 
 function WelcomeScreen({
-  deals, onSelect, getEntry, pausedProgress, onStartSession, onResumeSession,
+  todayDeals, onSelect, pausedProgress, onStartSession, onResumeSession,
 }: {
-  deals: Deal[];
+  /** Dzisiejsza kolejka SRS — ta sama, którą pokazuje panel boczny. */
+  todayDeals: Deal[];
   onSelect: (id: string) => void;
-  getEntry: (id: string) => SRSEntry;
   pausedProgress: SessionProgress | null;
   onStartSession: () => void;
   onResumeSession: () => void;
 }) {
-  const due = deals.filter(d => isReviewDue(getEntry(d.id)));
   const [confirmRestart, setConfirmRestart] = useState(false);
 
   return (
@@ -461,12 +467,12 @@ function WelcomeScreen({
         </button>
       )}
 
-      {due.length > 0 && (
+      {todayDeals.length > 0 && (
         <div className="bg-brand-soft border border-brand-line rounded-[12px] p-4 max-w-sm w-full">
           <div className="text-brand-accent-2 font-semibold text-sm mb-3 uppercase tracking-wider">
-            ★ {due.length} rozdań do powtórki dziś
+            ★ Na dziś ({todayDeals.length})
           </div>
-          {due.slice(0, 3).map(d => (
+          {todayDeals.slice(0, 3).map(d => (
             <button
               key={d.id}
               onClick={() => onSelect(d.id)}

@@ -203,6 +203,24 @@ export function useDailySession(args: Args) {
 
   const dismissCompleted = useCallback(() => setCompleted(null), []);
 
+  /**
+   * Co zostało na dziś — źródło dla „Rekomendowane na dziś" w panelu bocznym.
+   * Poza sesją to podgląd kolejki, którą dostaniesz po „Rozpocznij", więc najwyżej
+   * `dailyTarget` pozycji zamiast całej puli zaległości (reszta i tak wraca w kolejne
+   * dni). Gdy sesja trwa albo czeka wstrzymana, bierzemy JEJ kolejkę: świeże
+   * generowanie zwróciłoby inny zestaw niż ten, do którego wracasz (D9).
+   */
+  const todayQueue = useMemo<string[]>(() => {
+    const snap = runtime ?? paused;
+    if (snap) {
+      // W buforze przebieg główny jest już wyczerpany; poza nim bufor to ogon, który
+      // dopiero przyjdzie — stąd obie części w tej samej liście.
+      const main = snap.inBuffer ? [] : snap.session.slots.slice(snap.index).map(s => s.dealId);
+      return [...main, ...snap.buffer.slice(snap.inBuffer ? snap.bufferIndex : 0)];
+    }
+    return deals.length ? generateDailySession(deals, store, settings).slots.map(s => s.dealId) : [];
+  }, [runtime, paused, deals, store, settings]);
+
   const currentDealId = useMemo(() => {
     if (!runtime) return null;
     return runtime.inBuffer
@@ -277,6 +295,8 @@ export function useDailySession(args: Args) {
     progress: runtime ? toProgress(runtime) : null,
     sessionToken: runtime?.token ?? 0,
     completed,
+    /** Id rozdań, które zostały na dziś — w kolejności sesji. */
+    todayQueue,
     /** Wstrzymana migawka na dziś — źródło liczników „Wznów sesję (4/12)". */
     pausedSession: paused?.session ?? null,
     pausedProgress: paused ? toProgress(paused) : null,
