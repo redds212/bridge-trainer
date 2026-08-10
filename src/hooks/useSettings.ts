@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { UserSettings, LearningMode } from '../types';
 import { supabase } from '../lib/supabase';
+import { DEFAULT_DAILY_TARGET } from '../lib/session';
 import { useAuth } from '../auth/AuthContext';
 
 export const DAILY_TARGET_MIN = 5;
@@ -18,7 +19,7 @@ function clampTarget(n: number): number {
 export function useSettings(userId: string | null) {
   const { user } = useAuth();
   const [settings, setSettings] = useState<UserSettings>({
-    dailyTarget: clampTarget(user?.dailyTarget ?? 10),
+    dailyTarget: clampTarget(user?.dailyTarget ?? DEFAULT_DAILY_TARGET),
     mode: user?.mode ?? 'balanced',
     timedMode: user?.timedMode ?? false,
   });

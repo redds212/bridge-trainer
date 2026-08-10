@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { DEFAULT_DAILY_TARGET } from '../lib/session';
 import type { AppUser, LearningMode } from '../types';
 
 interface AuthResult { error?: string }
@@ -92,7 +93,7 @@ async function loadProfile(session: Session | null): Promise<ProfileLoad> {
   const fallback: AppUser = {
     id: authId, email,
     username: email.split('@')[0] || 'użytkownik',
-    isAdmin: false, status: 'pending', dailyTarget: 10, mode: 'balanced', timedMode: false,
+    isAdmin: false, status: 'pending', dailyTarget: DEFAULT_DAILY_TARGET, mode: 'balanced', timedMode: false,
   };
 
   const { data, error } = await supabase
@@ -117,7 +118,7 @@ async function loadProfile(session: Session | null): Promise<ProfileLoad> {
       username: data.username ?? email.split('@')[0] ?? 'użytkownik',
       isAdmin: !!data.is_admin,
       status: (data.status === 'approved' ? 'approved' : 'pending'),
-      dailyTarget: data.daily_target ?? 10,
+      dailyTarget: data.daily_target ?? DEFAULT_DAILY_TARGET,
       mode: (data.mode ?? 'balanced') as LearningMode,
       timedMode: data.timed_mode ?? false,
     },

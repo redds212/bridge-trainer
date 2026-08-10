@@ -23,6 +23,15 @@ export interface DailySession {
   mode: LearningMode;
 }
 
+/**
+ * Cel dzienny dla konta, które go jeszcze nie ustawiło. Musi zgadzać się z
+ * `default` kolumny `profiles.daily_target` (migracja 0011) — inaczej świeże konto
+ * widziałoby inną kolejkę przed pierwszym zapisem ustawień niż po nim.
+ * Mieszka tutaj, a nie przy `DAILY_TARGET_MIN/MAX` w `useSettings`, bo czyta go też
+ * `AuthContext`, a `useSettings` sam importuje z `AuthContext` (byłby cykl).
+ */
+export const DEFAULT_DAILY_TARGET = 20;
+
 // New / Review split for the steady state (Section 1).
 export const MODE_PROPORTIONS: Record<LearningMode, { newPct: number; reviewPct: number }> = {
   maintenance: { newPct: 0.2, reviewPct: 0.8 },
