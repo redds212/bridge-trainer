@@ -181,6 +181,8 @@ export function UserPanel({
           </div>
         </section>
 
+        <ChangePasswordCard />
+
         {/* Settings: daily target + mode */}
         <section className="bg-slate-800 rounded-xl border border-slate-700 p-5 space-y-5">
           <h2 className="text-slate-200 font-semibold text-sm">Ustawienia nauki</h2>
@@ -283,8 +285,6 @@ export function UserPanel({
             )}
           </div>
         </section>
-
-        <ChangePasswordCard />
 
         <InstallCard />
 
