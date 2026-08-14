@@ -1,9 +1,10 @@
-import type { Deal } from '../types';
+import type { Deal, Difficulty } from '../types';
 
 /**
- * Filtrowanie rozdań po nazwie — wspólne dla panelu bocznego i przycisku
- * „Następne →" (docs/DEAL_SEARCH_PLAN.md, D2 i D5). Oba miejsca muszą liczyć
- * identycznie, inaczej przycisk prowadziłby poza listę, którą użytkownik widzi.
+ * Filtrowanie rozdań po nazwie i po poziomie trudności — wspólne dla panelu
+ * bocznego i przycisku „Następne →" (docs/DEAL_SEARCH_PLAN.md, D2 i D5). Oba
+ * miejsca muszą liczyć identycznie, inaczej przycisk prowadziłby poza listę,
+ * którą użytkownik widzi.
  */
 
 /**
@@ -26,14 +27,23 @@ function tokenize(query: string): string[] {
 }
 
 /**
- * Puste zapytanie przepuszcza całość: brak filtru to nie jest zero wyników.
- * Zwraca tę samą tablicę, więc bez wpisanej frazy nie ma nawet nowej referencji.
+ * Puste zapytanie i pusty zbiór poziomów przepuszczają całość: brak filtru to nie
+ * jest zero wyników. Zwraca tę samą tablicę, więc bez żadnego filtru nie ma nawet
+ * nowej referencji.
+ *
+ * „Nic nie zaznaczone" = wszystkie poziomy (a nie żaden) — dzięki temu odklikanie
+ * ostatniego chipa samo kasuje filtr i nie potrzeba osobnego „Wszystkie".
  */
-export function filterDeals(deals: Deal[], query: string): Deal[] {
+export function filterDeals(
+  deals: Deal[],
+  query: string,
+  difficulties: readonly Difficulty[] = [],
+): Deal[] {
   const tokens = tokenize(query);
-  if (tokens.length === 0) return deals;
+  if (tokens.length === 0 && difficulties.length === 0) return deals;
 
   return deals.filter(deal => {
+    if (difficulties.length > 0 && !difficulties.includes(deal.difficulty)) return false;
     const title = normalize(deal.title);
     return tokens.every(token => title.includes(token));
   });

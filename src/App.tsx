@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import type { SRSEntry, Deal } from './types';
+import type { SRSEntry, Deal, Difficulty } from './types';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { LoginPage } from './auth/LoginPage';
 import { ResetPasswordPage } from './auth/ResetPasswordPage';
@@ -43,6 +43,11 @@ function AppShell() {
   // do Admina i z powrotem, bo `AppShell` się nie odmontowuje — pole zostaje
   // wypełnione, a obok niego jest „✕".
   const [dealQuery, setDealQuery] = useState('');
+  // Filtr trudności mieszka obok frazy i z tego samego powodu: „Następne →" musi
+  // chodzić po tym samym zbiorze, który widać na liście (D5). Pusto = wszystkie.
+  const [dealDifficulties, setDealDifficulties] = useState<Difficulty[]>([]);
+  const toggleDifficulty = (d: Difficulty) =>
+    setDealDifficulties(prev => (prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]));
 
   const dealsHook = useDeals();
   const userId = user?.id ?? null;
@@ -121,6 +126,8 @@ function AppShell() {
       timedMode={settings.timedMode}
       dealQuery={dealQuery}
       onDealQueryChange={setDealQuery}
+      dealDifficulties={dealDifficulties}
+      onToggleDifficulty={toggleDifficulty}
       onAdmin={user.isAdmin ? () => setView('admin') : undefined}
       onPanel={() => setView('panel')}
     />
@@ -140,11 +147,13 @@ interface TrainerProps {
   timedMode: boolean;
   dealQuery: string;
   onDealQueryChange: (query: string) => void;
+  dealDifficulties: Difficulty[];
+  onToggleDifficulty: (difficulty: Difficulty) => void;
   onAdmin?: () => void;
   onPanel: () => void;
 }
 
-function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session, timedMode, dealQuery, onDealQueryChange, onAdmin, onPanel }: TrainerProps) {
+function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session, timedMode, dealQuery, onDealQueryChange, dealDifficulties, onToggleDifficulty, onAdmin, onPanel }: TrainerProps) {
   const { getEntry } = srs;
 
   // Rekomendacje = dzisiejsza kolejka SRS, w jej kolejności. Rozdanie z kolejki może
@@ -238,16 +247,17 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
   };
 
   // „Następne →" chodzi po tym samym zbiorze, który widać w panelu bocznym
-  // (DEAL_SEARCH_PLAN.md, D5). Bez wpisanej frazy `visibleDeals === deals`, więc
-  // zachowanie jest dokładnie takie jak dotąd.
-  const visibleDeals = filterDeals(deals, dealQuery);
+  // (DEAL_SEARCH_PLAN.md, D5). Bez frazy i bez wybranej trudności
+  // `visibleDeals === deals`, więc zachowanie jest dokładnie takie jak dotąd.
+  const visibleDeals = filterDeals(deals, dealQuery, dealDifficulties);
   const visibleIdx = visibleDeals.findIndex(d => d.id === selectedId);
   // Gdy bieżące rozdanie wypadło z filtru (fraza zmieniona po wyborze), „następne"
   // znaczy „pierwsze z aktualnych trafień" — wejście do zbioru zamiast martwego przycisku.
   const nextDeal = visibleDeals[visibleIdx + 1] ?? null;
   // Licznik tylko wtedy, gdy filtr działa i bieżące rozdanie faktycznie w nim jest:
   // nie da się być na pozycji N zbioru, poza którym się stoi (D7).
-  const filterPosition = dealQuery.trim() && visibleIdx >= 0
+  const filterActive = dealQuery.trim().length > 0 || dealDifficulties.length > 0;
+  const filterPosition = filterActive && visibleIdx >= 0
     ? `${visibleIdx + 1}/${visibleDeals.length}`
     : null;
 
@@ -275,6 +285,8 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
           onSelect={(id) => { handleSelect(id); setSidebarOpen(false); }}
           query={dealQuery}
           onQueryChange={onDealQueryChange}
+          difficulties={dealDifficulties}
+          onToggleDifficulty={onToggleDifficulty}
           onAdmin={onAdmin}
           onPanel={onPanel}
         />
@@ -523,7 +535,7 @@ function RatedBanner({ entry, onNext, hasNext, filterPosition }: RatedBannerProp
         title={hasNext
           ? undefined
           : filterPosition
-          ? 'To ostatnie rozdanie pasujące do wyszukiwania'
+          ? 'To ostatnie rozdanie pasujące do filtrów'
           : 'To ostatnie rozdanie na liście'}
         className={`text-xs px-3 py-1 rounded-[7px] border transition-colors flex-shrink-0 whitespace-nowrap ${
           hasNext

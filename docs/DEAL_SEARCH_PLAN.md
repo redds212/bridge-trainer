@@ -153,14 +153,54 @@ Pozostałe ustalenia tego kroku:
   (dziś jej tam nie ma), styl zgodny z istniejącymi polami
   (`bg-brand-soft` / `border-brand-line`).
 
+## Rozszerzenie: filtr trudności (2026-08-14)
+
+### D9. Filtr trudności to drugi wymiar tego samego filtra
+
+Cztery chipy `E / M / H / X` (Easy, Medium, Hard, Expert) w jednym rzędzie pod polem
+wyszukiwania, wielokrotny wybór, koniunkcja z frazą. Konsekwencje wprost z D1–D7:
+
+- Obejmuje **wyłącznie główną listę** — rekomendacje i liczniki w stopce zostają
+  globalne (D1). Sprawdzone: przy aktywnym filtrze stopka nadal liczy z pełnej puli.
+- Stan mieszka w `AppShell` obok frazy i wchodzi do `filterDeals` jako trzeci
+  argument, bo `Następne →` musi chodzić po tym samym zbiorze (D5). Marker
+  `(2/3)` i wyszarzenie na końcu zbioru działają tak samo dla obu filtrów (D6, D7).
+- **Pusto = wszystkie poziomy**, nie „żaden". Odklikanie ostatniego chipa samo
+  kasuje filtr, więc nie potrzeba osobnego przycisku `Wszystkie` — a taki przycisk
+  nie zmieściłby się w jednej linii razem z czterema poziomami.
+- Komunikat braku trafień nazywa filtr, który faktycznie działa: fraza, trudność
+  albo oba naraz (rozszerzenie D3).
+
+Kolory chipów i etykiet wierszy pochodzą z jednego źródła (`src/lib/difficulty.ts`),
+bo rozjechane odcienie zamieniłyby rozpoznawanie w czytanie. Litera zostaje w pełnym
+kolorze także w stanie wyłączonym — przygaszona czerwień `X` schodziła do 2,2:1
+kontrastu wobec tła; o stanie mówi wypełnienie i obwódka.
+
+Odrzucone: liczniki na chipach (`E 12`) — ta sama ozdoba, którą D8 odrzuciło dla
+licznika wyników; widoczna etykieta „Trudność" — zjadałaby ćwiartkę rzędu szerokiego
+na 232 px, czyli dokładnie to, co pozwala zmieścić filtr w jednej linii.
+
+### D10. Rekomendacje zwijane
+
+Blok `★ Rekomendowane na dziś` dostał przełącznik na nagłówku (szewron, `aria-expanded`).
+Po zwinięciu zostaje sam nagłówek z licznikiem — „ile jest na dziś" widać nadal, znika
+tylko lista trzech pozycji. Oddaje to liście ~107 px, przy koszcie ~32 px na rząd chipów.
+
+Domyślnie **rozwinięte**: to rekomendacje mówią, co dziś ćwiczyć, a zwinięcie jest
+dla sesji „przyszedłem szukać, nie powtarzać". Stan jest lokalny dla `Sidebar` —
+dotyczy wyglądu, nie tego, co widać na liście, więc nie musi trafiać do `AppShell`.
+
 ## Pliki
 
 | Plik | Zmiana |
 | --- | --- |
-| `src/lib/dealSearch.ts` | **nowy** — `normalize()` i `matchesQuery(deal, query)` (D2) |
+| `src/lib/dealSearch.ts` | **nowy** — `normalize()` i `matchesQuery(deal, query)` (D2); trzeci argument `difficulties` (D9) |
+| `src/lib/difficulty.ts` | **nowy** — skala, kolory, skróty i polskie nazwy poziomów (D9) |
+| `src/components/DifficultyFilter.tsx` | **nowy** — rząd czterech chipów (D9) |
 | `src/components/Icon.tsx` | ikona `search` (D8) |
-| `src/components/Sidebar.tsx` | pole wyszukiwania + `✕`/`Escape`, propsy `query`/`onQueryChange`, filtr przed `byCategory`, stan braku trafień (D1, D3, D4, D8) |
-| `src/App.tsx` | stan `dealQuery`, przekazanie do `Sidebar`, `handleNextDeal` po przefiltrowanej liście, marker i stan nieaktywny w `RatedBanner` (D4, D5, D6, D7) |
+| `src/components/Sidebar.tsx` | pole wyszukiwania + `✕`/`Escape`, propsy `query`/`onQueryChange`, filtr przed `byCategory`, stan braku trafień (D1, D3, D4, D8); rząd chipów i zwijane rekomendacje (D9, D10) |
+| `src/App.tsx` | stan `dealQuery`, przekazanie do `Sidebar`, `handleNextDeal` po przefiltrowanej liście, marker i stan nieaktywny w `RatedBanner` (D4, D5, D6, D7); stan `dealDifficulties` (D9) |
+| `src/dev/SidebarPreview.tsx` | **nowy** — dev-only podgląd panelu (`?preview=sidebar`), bez logowania |
 
 ## Świadomie odrzucone
 

@@ -1,7 +1,10 @@
-import type { Deal, SRSEntry, SRSStatus } from '../types';
+import { useState } from 'react';
+import type { Deal, Difficulty, SRSEntry, SRSStatus } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { filterDeals } from '../lib/dealSearch';
+import { DIFF_COLOR } from '../lib/difficulty';
 import { LoopMark } from './LoopMark';
+import { DifficultyFilter } from './DifficultyFilter';
 import { Icon } from './Icon';
 
 interface Props {
@@ -14,6 +17,10 @@ interface Props {
   /** Fraza wyszukiwania — stan trzyma `AppShell`, bo używa go też „Następne →". */
   query: string;
   onQueryChange: (query: string) => void;
+  /** Wybrane poziomy trudności; pusto = bez filtru. Stan również w `AppShell`,
+      z tego samego powodu co fraza (DEAL_SEARCH_PLAN.md, D5). */
+  difficulties: readonly Difficulty[];
+  onToggleDifficulty: (difficulty: Difficulty) => void;
   onAdmin?: () => void;
   onPanel?: () => void;
 }
@@ -33,20 +40,18 @@ const STATUS_LABEL: Record<SRSStatus, string> = {
   MASTERED: 'Opanowane',
 };
 
-// Difficulty scale within the brand palette: green → amber → orange → red.
-const DIFF_COLOR: Record<string, string> = {
-  Easy: '#34d399',   // brand-accent-soft
-  Medium: '#fbbf24', // brand-accent-2 (amber)
-  Hard: '#df8a2e',   // diamond orange
-  Expert: '#e0524d', // brand-danger (red)
-};
-
-export function Sidebar({ deals, todayDeals, selectedId, getEntry, onSelect, query, onQueryChange, onAdmin, onPanel }: Props) {
+export function Sidebar({ deals, todayDeals, selectedId, getEntry, onSelect, query, onQueryChange, difficulties, onToggleDifficulty, onAdmin, onPanel }: Props) {
   const { user, logout } = useAuth();
-  // Filtr obejmuje wyłącznie listę poniżej: rekomendacje i liczniki w stopce liczą
-  // się z pełnego zbioru, żeby wpisana fraza nie chowała tego, co jest na dziś do
-  // powtórki, ani nie majstrowała przy statystykach (DEAL_SEARCH_PLAN.md, D1).
-  const visible = filterDeals(deals, query);
+  // Rekomendacje domyślnie rozwinięte — to one mówią, co dziś ćwiczyć. Zwinięcie
+  // oddaje ~80 px liście, gdy użytkownik przyszedł tu szukać, a nie powtarzać.
+  // Stan lokalny (nie w `AppShell`): dotyczy wyłącznie wyglądu tego bloku.
+  const [showToday, setShowToday] = useState(true);
+  // Filtry obejmują wyłącznie listę poniżej: rekomendacje i liczniki w stopce liczą
+  // się z pełnego zbioru, żeby wpisana fraza ani wybrany poziom nie chowały tego, co
+  // jest na dziś do powtórki, ani nie majstrowały przy statystykach (D1).
+  const visible = filterDeals(deals, query, difficulties);
+  const trimmedQuery = query.trim();
+  const filtered = trimmedQuery.length > 0 || difficulties.length > 0;
   // Puls na kropce znaczy „jest w dzisiejszej kolejce", a nie „zaległe": `isReviewDue`
   // jest prawdziwe dla każdego rozdania NEW, więc migała cała lista naraz.
   const plannedIds = new Set(todayDeals.map(d => d.id));
@@ -120,33 +125,52 @@ export function Sidebar({ deals, todayDeals, selectedId, getEntry, onSelect, que
         </div>
       )}
 
-      {/* Due today */}
+      {/* Due today — zwijane. Po zwinięciu zostaje sam nagłówek z licznikiem, więc
+          „ile jest na dziś" widać nadal; znika tylko lista trzech pozycji. */}
       {todayDeals.length > 0 && (
         <div className="mx-3 my-2 px-3 py-2 bg-brand-soft rounded-[9px]">
-          <div className="text-brand-accent-2 text-[10px] font-semibold uppercase tracking-wider mb-1.5">
-            ★ Rekomendowane na dziś ({todayDeals.length})
-          </div>
-          {todayDeals.slice(0, 3).map(d => (
-            <button
-              key={d.id}
-              onClick={() => onSelect(d.id)}
-              className={`w-full text-left text-xs py-1 px-2 rounded-[7px] transition-colors mb-0.5 ${
-                selectedId === d.id ? 'bg-brand-line/60 text-brand-text' : 'text-brand-text/90 hover:bg-brand-line/40'
-              }`}
-            >
-              {d.title}
-            </button>
-          ))}
-          {todayDeals.length > 3 && (
-            <div className="text-brand-dim text-[10px] mt-1 pl-2">+{todayDeals.length - 3} więcej…</div>
+          <button
+            onClick={() => setShowToday(v => !v)}
+            aria-expanded={showToday}
+            title={showToday ? 'Zwiń rekomendacje' : 'Rozwiń rekomendacje'}
+            // `py-1 -my-1`: sam wiersz nagłówka ma 15 px wysokości, czyli za mało na
+            // kciuka. Padding powiększa cel dotyku do ~23 px, a ujemny margines zdejmuje
+            // go z układu, więc blok wygląda dokładnie tak jak przedtem.
+            className="w-full flex items-center gap-1.5 py-1 -my-1 text-brand-accent-2 text-[10px] font-semibold uppercase tracking-wider hover:text-brand-accent-2/80 transition-colors"
+          >
+            <span className="flex-1 min-w-0 text-left truncate">★ Rekomendowane na dziś ({todayDeals.length})</span>
+            <Icon
+              name="chevron-down"
+              size={13}
+              className={`flex-shrink-0 transition-transform duration-150 ${showToday ? '' : '-rotate-90'}`}
+            />
+          </button>
+          {showToday && (
+            <div className="mt-1.5">
+              {todayDeals.slice(0, 3).map(d => (
+                <button
+                  key={d.id}
+                  onClick={() => onSelect(d.id)}
+                  className={`w-full text-left text-xs py-1 px-2 rounded-[7px] transition-colors mb-0.5 ${
+                    selectedId === d.id ? 'bg-brand-line/60 text-brand-text' : 'text-brand-text/90 hover:bg-brand-line/40'
+                  }`}
+                >
+                  {d.title}
+                </button>
+              ))}
+              {todayDeals.length > 3 && (
+                <div className="text-brand-dim text-[10px] mt-1 pl-2">+{todayDeals.length - 3} więcej…</div>
+              )}
+            </div>
           )}
         </div>
       )}
 
-      {/* Wyszukiwarka — zawsze widoczna i POZA kontenerem przewijania, więc zostaje
-          na miejscu, gdy lista jedzie pod nią. Bez autofocusa: na telefonie
-          podnosiłby klawiaturę przy każdym otwarciu szuflady (D8). */}
-      <div className="px-3 pt-2 pb-1.5 flex-shrink-0">
+      {/* Wyszukiwarka i filtr trudności — zawsze widoczne i POZA kontenerem
+          przewijania, więc zostają na miejscu, gdy lista jedzie pod nimi. Bez
+          autofocusa: na telefonie podnosiłby klawiaturę przy każdym otwarciu
+          szuflady (D8). */}
+      <div className="px-3 pt-2 pb-1.5 flex-shrink-0 space-y-1.5">
         <div className="relative">
           <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-brand-dim pointer-events-none">
             <Icon name="search" size={13} />
@@ -171,13 +195,21 @@ export function Sidebar({ deals, todayDeals, selectedId, getEntry, onSelect, que
             </button>
           )}
         </div>
+
+        <DifficultyFilter selected={difficulties} onToggle={onToggleDifficulty} />
       </div>
 
       {/* Deal list by category */}
       <div className="flex-1 overflow-y-auto py-2">
-        {visible.length === 0 && query.trim() && (
+        {visible.length === 0 && filtered && (
           <div className="px-4 py-3 text-brand-dim text-[11px] leading-relaxed">
-            Brak rozdań pasujących do „{query.trim()}”.
+            {/* Komunikat nazywa ten filtr, który faktycznie działa — inaczej przy
+                aktywnych chipach i pustej frazie panel milczał na temat przyczyny. */}
+            {trimmedQuery && difficulties.length > 0
+              ? <>Brak rozdań pasujących do „{trimmedQuery}” w wybranej trudności.</>
+              : trimmedQuery
+                ? <>Brak rozdań pasujących do „{trimmedQuery}”.</>
+                : <>Brak rozdań o wybranej trudności.</>}
           </div>
         )}
         {Object.entries(byCategory).map(([cat, catDeals]) => (
