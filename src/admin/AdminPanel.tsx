@@ -6,6 +6,8 @@ import { UsersAdmin } from './UsersAdmin';
 import { ReportsAdmin } from './ReportsAdmin';
 import { validateDeal } from '../lib/validateDeal';
 import { dealSignature, normalizeTitle } from '../lib/dealSignature';
+import { matchesQuery } from '../lib/dealSearch';
+import { Icon } from '../components/Icon';
 
 type Tab = 'deals' | 'users' | 'reports';
 
@@ -83,6 +85,7 @@ export function AdminPanel({ allDeals, loading, error, onAdd, onAddMany, onBackf
   const [flash, setFlash] = useState('');
   const [flashErr, setFlashErr] = useState('');
   const [showArchived, setShowArchived] = useState(false);
+  const [dealQuery, setDealQuery] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [importScan, setImportScan] = useState<ImportScan | null>(null);
@@ -97,7 +100,16 @@ export function AdminPanel({ allDeals, loading, error, onAdd, onAddMany, onBackf
   const customDeals = ordered.filter(d => !d.isBase);
   const active = ordered.filter(d => !d.archived);
   const archived = ordered.filter(d => d.archived);
-  const visible = showArchived ? ordered : active;
+  const listed = showArchived ? ordered : active;
+  // Wyszukiwarka zawęża to, co i tak jest na liście — przełącznik archiwum zostaje
+  // nadrzędny, więc fraza nigdy nie wyciąga z ukrycia zarchiwizowanego rozdania.
+  // Przeszukiwane pola to dokładnie te, które tabela pokazuje w wierszu: tytuł,
+  // identyfikator (wklejony ze zgłoszenia albo z listy duplikatów ma trafić w wiersz)
+  // i kategoria. Zapytanie o coś, co widać w kolumnie, nie może zwracać zera.
+  const trimmedQuery = dealQuery.trim();
+  const visible = trimmedQuery
+    ? listed.filter(d => matchesQuery(`${d.title} ${d.category} ${d.id}`, dealQuery))
+    : listed;
 
   const runOp = async (op: () => Promise<OpResult>, okMsg: string) => {
     setBusy(true);
@@ -476,25 +488,72 @@ export function AdminPanel({ allDeals, loading, error, onAdd, onAddMany, onBackf
         )}
 
         <div>
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+            {/* Licznik w nagłówku zostaje globalny — opisuje bazę, nie bieżące
+                trafienia. Ile z niej widać przy wpisanej frazie, mówi „N z M"
+                przy polu, żeby dwie różne liczby nie stały obok siebie w jednym zdaniu. */}
             <h2 className="text-slate-300 font-semibold text-xs uppercase tracking-wider">
               Rozdania ({active.length} aktywnych{archived.length ? `, ${archived.length} zarchiwizowanych` : ''})
             </h2>
-            {archived.length > 0 && (
-              <button
-                onClick={() => setShowArchived(v => !v)}
-                className="text-xs text-slate-500 hover:text-slate-300 underline transition-colors"
-              >
-                {showArchived ? 'Ukryj zarchiwizowane' : `Pokaż zarchiwizowane (${archived.length})`}
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              {trimmedQuery && (
+                <span className="text-slate-500 text-xs whitespace-nowrap">
+                  {visible.length} z {listed.length}
+                </span>
+              )}
+              <div className="relative">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">
+                  <Icon name="search" size={13} />
+                </span>
+                <input
+                  type="text"
+                  value={dealQuery}
+                  onChange={e => setDealQuery(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Escape') setDealQuery(''); }}
+                  placeholder="Szukaj: tytuł, kategoria, id…"
+                  aria-label="Szukaj rozdania"
+                  className="w-64 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder:text-slate-500 text-xs pl-[30px] pr-7 py-1.5 outline-none focus:border-blue-500 transition-colors"
+                />
+                {dealQuery && (
+                  <button
+                    onClick={() => setDealQuery('')}
+                    aria-label="Wyczyść wyszukiwanie"
+                    title="Wyczyść"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-slate-200 transition-colors"
+                  >
+                    <Icon name="close" size={12} />
+                  </button>
+                )}
+              </div>
+              {archived.length > 0 && (
+                <button
+                  onClick={() => setShowArchived(v => !v)}
+                  className="text-xs text-slate-500 hover:text-slate-300 underline transition-colors whitespace-nowrap"
+                >
+                  {showArchived ? 'Ukryj zarchiwizowane' : `Pokaż zarchiwizowane (${archived.length})`}
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto">
             {loading && allDeals.length === 0 ? (
               <div className="px-4 py-8 text-center text-slate-500 text-sm">Ładowanie rozdań…</div>
             ) : visible.length === 0 ? (
-              <div className="px-4 py-8 text-center text-slate-500 text-sm">Brak rozdań.</div>
+              <div className="px-4 py-8 text-center text-slate-500 text-sm">
+                {trimmedQuery ? (
+                  <>
+                    Brak rozdań pasujących do „{trimmedQuery}".
+                    {/* Zawężenie może pochodzić z przełącznika, nie z frazy — bez tej
+                        podpowiedzi admin szuka rozdania, które leży w archiwum. */}
+                    {!showArchived && archived.length > 0 && (
+                      <span className="block text-slate-600 text-xs mt-1">
+                        Zarchiwizowane ({archived.length}) są ukryte — włącz je przełącznikiem obok wyszukiwarki.
+                      </span>
+                    )}
+                  </>
+                ) : 'Brak rozdań.'}
+              </div>
             ) : (
               <table className="w-full text-sm">
                 <thead>

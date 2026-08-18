@@ -190,17 +190,36 @@ Domyślnie **rozwinięte**: to rekomendacje mówią, co dziś ćwiczyć, a zwini
 dla sesji „przyszedłem szukać, nie powtarzać". Stan jest lokalny dla `Sidebar` —
 dotyczy wyglądu, nie tego, co widać na liście, więc nie musi trafiać do `AppShell`.
 
+### D11. Wyszukiwarka w panelu admina — ten sam matcher, szersze pola
+
+Panel admina dostał własne pole nad tabelą rozdań. Wspólna z panelem bocznym zostaje
+**reguła dopasowania** (`matchesQuery`): normalizacja diakrytyków i tokeny przez AND,
+w jednym miejscu. Różni się zestaw przeszukiwanych pól — tu **tytuł, kategoria i id**,
+bo tabela pokazuje je wszystkie w wierszu, a identyfikator wklejony ze zgłoszenia
+albo z listy duplikatów ma trafiać w wiersz. Tokeny mogą przy tym padać w różnych
+polach: `rozgrywka impas` znajduje rozdanie z kategorii Rozgrywka o tym tytule.
+
+- Przełącznik „Pokaż zarchiwizowane" zostaje **nadrzędny** wobec frazy — szukanie nigdy
+  nie wyciąga rozdania z ukrycia. Gdy fraza nie ma trafień, a archiwum jest schowane,
+  komunikat mówi to wprost, zamiast kazać zgadywać.
+- Licznik w nagłówku sekcji zostaje globalny (opisuje bazę); trafienia liczy osobne
+  `N z M` przy polu. Odwrotnie niż w panelu bocznym (D8), gdzie licznik odrzucono —
+  tam chodziło o 256 px szerokości i trzy widoczne wiersze, tu jest tabela na kilkaset
+  pozycji i pełna szerokość nagłówka.
+
 ## Pliki
 
 | Plik | Zmiana |
 | --- | --- |
-| `src/lib/dealSearch.ts` | **nowy** — `normalize()` i `matchesQuery(deal, query)` (D2); trzeci argument `difficulties` (D9) |
+| `src/lib/dealSearch.ts` | **nowy** — `normalize()` i `matchesQuery(deal, query)` (D2); trzeci argument `difficulties` (D9); `matchesQuery(text, query)` dla admina (D11) |
+| `src/admin/AdminPanel.tsx` | pole wyszukiwania nad tabelą, licznik `N z M`, komunikat braku trafień (D11) |
 | `src/lib/difficulty.ts` | **nowy** — skala, kolory, skróty i polskie nazwy poziomów (D9) |
 | `src/components/DifficultyFilter.tsx` | **nowy** — rząd czterech chipów (D9) |
 | `src/components/Icon.tsx` | ikona `search` (D8) |
 | `src/components/Sidebar.tsx` | pole wyszukiwania + `✕`/`Escape`, propsy `query`/`onQueryChange`, filtr przed `byCategory`, stan braku trafień (D1, D3, D4, D8); rząd chipów i zwijane rekomendacje (D9, D10) |
 | `src/App.tsx` | stan `dealQuery`, przekazanie do `Sidebar`, `handleNextDeal` po przefiltrowanej liście, marker i stan nieaktywny w `RatedBanner` (D4, D5, D6, D7); stan `dealDifficulties` (D9) |
 | `src/dev/SidebarPreview.tsx` | **nowy** — dev-only podgląd panelu (`?preview=sidebar`), bez logowania |
+| `src/dev/AdminPreview.tsx` | **nowy** — dev-only podgląd panelu admina (`?preview=admin`), bez konta z uprawnieniami |
 
 ## Świadomie odrzucone
 

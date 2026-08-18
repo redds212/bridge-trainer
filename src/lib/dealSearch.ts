@@ -48,3 +48,15 @@ export function filterDeals(
     return tokens.every(token => title.includes(token));
   });
 }
+
+/**
+ * Dopasowanie do dowolnego tekstu, tą samą normalizacją i tą samą regułą AND.
+ * Panel admina szuka po szerszym zestawie pól niż panel boczny (tytuł, kategoria,
+ * id), bo pokazuje je wszystkie w wierszu tabeli — a wklejony identyfikator ze
+ * zgłoszenia albo z listy duplikatów ma trafiać w wiersz. Reguła dopasowania zostaje
+ * przy tym wspólna: jedno miejsce na normalizację diakrytyków i podział na tokeny.
+ */
+export function matchesQuery(text: string, query: string): boolean {
+  const haystack = normalize(text);
+  return tokenize(query).every(token => haystack.includes(token));
+}
