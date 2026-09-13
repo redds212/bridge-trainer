@@ -2,8 +2,10 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import type { Deal, SRSStore, UserSettings, AttemptPhase } from '../types';
 import type { DailySessionRow } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
-import { todayKey, toDateKey } from '../lib/date';
+import { todayKey, toDateKey, dateKeyToDate } from '../lib/date';
 import { generateDailySession, adaptSession, sessionFromSlots, type DailySession } from '../lib/session';
+import { normalizeEntry, isReviewDue } from '../lib/srs';
+import { useDayKey } from './useDayKey';
 
 interface Runtime {
   session: DailySession;
@@ -118,6 +120,10 @@ export function useDailySession(args: Args) {
   const [paused, setPaused] = useState<Runtime | null>(null);
   const [completed, setCompleted] = useState<DailySession | null>(null);
   const [loading, setLoading] = useState(true);
+  // Doba, na którą pracuje kolejka. Każde przeliczenie w tym hooku dostaje `now`
+  // z tego klucza, więc podgląd, `start()` i migawka mówią o tym samym dniu.
+  const dayKey = useDayKey();
+  const dayNow = useMemo(() => dateKeyToDate(dayKey), [dayKey]);
 
   // Ostatni stan, o którym wiemy, że siedzi w bazie. Chroni przed odesłaniem z
   // powrotem tego, co przed chwilą wczytaliśmy, i przed zapisem przy samej
@@ -154,6 +160,22 @@ export function useDailySession(args: Args) {
     return () => { active = false; };
   }, [userId]);
 
+  // Przełom doby (00:00 czasu lokalnego). Kolejka jest „na dziś”, więc wczorajsza
+  // sesja przestaje obowiązywać niezależnie od tego, ile z niej zostało: migawka
+  // leci do kosza, a `todayQueue` generuje zestaw na nowy dzień. Nic się przy tym nie
+  // gubi — każda udzielona odpowiedź poszła write-through do SRS-u i historii w
+  // momencie kliknięcia; przepada tylko ogon wczorajszej kolejki, który z definicji
+  // ma być policzony od nowa.
+  const dayRef = useRef(dayKey);
+  useEffect(() => {
+    if (dayRef.current === dayKey) return;
+    dayRef.current = dayKey;
+    setRuntime(null);
+    setPaused(null);
+    setCompleted(null); // podsumowanie wczorajszej sesji nie ma czego pilnować
+    clearRow();         // wiersz w bazie jest z wczoraj
+  }, [dayKey, clearRow]);
+
   // Zapis write-through: każdy nowy stan sesji ląduje w bazie, tak samo jak
   // wyniki w `useSRS`. Dzięki temu awaryjne zamknięcie karty nic nie kosztuje.
   useEffect(() => {
@@ -174,7 +196,7 @@ export function useDailySession(args: Args) {
   }, [clearRow]);
 
   const start = useCallback(() => {
-    const session = generateDailySession(deals, store, settings);
+    const session = generateDailySession(deals, store, settings, dayNow);
     setCompleted(null);
     setPaused(null);
     if (!session.slots.length) {
@@ -185,7 +207,7 @@ export function useDailySession(args: Args) {
     }
     setRuntime({ session, index: 0, buffer: [], inBuffer: false, bufferIndex: 0, token: 1 });
     return session;
-  }, [deals, store, settings, clearRow]);
+  }, [deals, store, settings, dayNow, clearRow]);
 
   /** Wyjście z sesji bez jej kasowania — migawka czeka na „Wznów" (D3). */
   const pause = useCallback(() => {
@@ -208,7 +230,9 @@ export function useDailySession(args: Args) {
    * Poza sesją to podgląd kolejki, którą dostaniesz po „Rozpocznij", więc najwyżej
    * `dailyTarget` pozycji zamiast całej puli zaległości (reszta i tak wraca w kolejne
    * dni). Gdy sesja trwa albo czeka wstrzymana, bierzemy JEJ kolejkę: świeże
-   * generowanie zwróciłoby inny zestaw niż ten, do którego wracasz (D9).
+   * generowanie zwróciłoby inny zestaw niż ten, do którego wracasz (D9) — ale
+   * przefiltrowaną przez aktualny SRS, bo migawka nie wie o ocenach wystawionych
+   * poza sesją (D12).
    */
   const todayQueue = useMemo<string[]>(() => {
     const snap = runtime ?? paused;
@@ -216,10 +240,18 @@ export function useDailySession(args: Args) {
       // W buforze przebieg główny jest już wyczerpany; poza nim bufor to ogon, który
       // dopiero przyjdzie — stąd obie części w tej samej liście.
       const main = snap.inBuffer ? [] : snap.session.slots.slice(snap.index).map(s => s.dealId);
-      return [...main, ...snap.buffer.slice(snap.inBuffer ? snap.bufferIndex : 0)];
+      const rest = [...main, ...snap.buffer.slice(snap.inBuffer ? snap.bufferIndex : 0)];
+      // Migawka zmienia się wyłącznie od odpowiedzi udzielonych W sesji, więc bez
+      // tego filtru rozdanie ocenione w swobodnej grze przy pauzie wisiało na liście
+      // do końca dnia. Zostaje to, co wciąż wypada na dziś: rozdanie przestawione na
+      // później — trafione (+3 dni) czy pudło (jutro) — dziś nie ma już czego robić.
+      // Pudło z przebiegu głównego zostaje: tam SRS-u nie ruszamy, więc termin jest
+      // nadal dzisiejszy, a pozycja czeka w ogonie bufora. Cofnięcie oceny RESTARTEM
+      // przywraca poprzedni termin, więc pozycja wraca na listę sama.
+      return rest.filter(id => isReviewDue(normalizeEntry(store[id]), dayNow));
     }
-    return deals.length ? generateDailySession(deals, store, settings).slots.map(s => s.dealId) : [];
-  }, [runtime, paused, deals, store, settings]);
+    return deals.length ? generateDailySession(deals, store, settings, dayNow).slots.map(s => s.dealId) : [];
+  }, [runtime, paused, deals, store, settings, dayNow]);
 
   const currentDealId = useMemo(() => {
     if (!runtime) return null;
@@ -242,7 +274,7 @@ export function useDailySession(args: Args) {
     const snap = runtime ?? paused;
     if (!snap || snap.inBuffer || !deals.length) return;
 
-    const next = adaptSession(snap.session, snap.index, deals, storeRef.current, settings);
+    const next = adaptSession(snap.session, snap.index, deals, storeRef.current, settings, dayNow);
     if (next === snap.session) return;
 
     const updated: Runtime = { ...snap, session: next, token: snap.token + 1 };
@@ -261,7 +293,7 @@ export function useDailySession(args: Args) {
       clearRow();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runtime, paused, deals.length, settings.dailyTarget, settings.mode, commit, clearRow]);
+  }, [runtime, paused, deals.length, settings.dailyTarget, settings.mode, dayNow, commit, clearRow]);
 
   /** handleUserAnswer — Sections 3 & 4 of the SRS spec. */
   const answer = useCallback((correct: boolean) => {

@@ -148,6 +148,43 @@ Bez blokad i bez wykrywania konfliktów. Dwie karty albo dwa urządzenia z tą s
 sesją nadpiszą się nawzajem — akceptowane, bo to aplikacja jednoosobowa, a
 wyniki (SRS, historia) i tak zapisują się niezależnie i nic z nich nie ginie.
 
+### D11. Doba przełamuje się w trakcie działania aplikacji
+
+Kolejka jest „na dziś”, więc o 00:00 czasu lokalnego wczorajsza sesja przestaje
+obowiązywać — niezależnie od tego, ile z niej zostało.
+[`useDayKey`](../src/hooks/useDayKey.ts) trzyma klucz doby jako stan i przełamuje
+go timerem do najbliższej północy. Sam timer nie wystarcza: w karcie w tle
+przeglądarka go dławi, a uśpione urządzenie przeskakuje całą noc bez jednego
+tiku — dlatego dobę sprawdzamy też przy powrocie do karty
+(`visibilitychange`) i przy odzyskaniu focusu.
+
+Przy zmianie klucza [`useDailySession`](../src/hooks/useDailySession.ts) zeruje
+`runtime`, `paused` i `completed` oraz kasuje wiersz w bazie, a `todayQueue`
+generuje zestaw na nowy dzień. Każde przeliczenie w hooku dostaje `now` z tego
+klucza (`dayNow`), więc podgląd, `start()` i migawka nigdy nie mówią o różnych
+dniach — to samo w karcie „Dzisiejsza sesja” i planie powtórek (D9).
+
+Nic przy tym nie ginie: każda udzielona odpowiedź poszła write-through do
+`srs_progress` i `attempts` w momencie kliknięcia. Przepada tylko ogon
+wczorajszej kolejki, który z definicji ma być policzony od nowa — pulę nowych
+tasuje ziarno z daty ([`session.ts`](../src/lib/session.ts)), więc następnego dnia
+wypada inny zestaw.
+
+### D12. Listę rekomendacji filtruje SRS, licznika sesji nie
+
+D8 mówi, że rozdanie z kolejki ocenione w swobodnej grze **wróci** w sesji i nie
+odejmujemy go od licznika — to zostaje bez zmian. Ale „Rekomendowane na dziś”
+odpowiada na inne pytanie: *co jest jeszcze do zrobienia dziś*. Migawka zmienia
+się wyłącznie od odpowiedzi udzielonych w sesji, więc bez filtru rozdanie
+rozwiązane przy pauzie wisiało na liście do końca dnia.
+
+Dlatego `todayQueue` przepuszcza resztę migawki przez `isReviewDue` z aktualnym
+`store`. Wypada to, co SRS przestawił na później — trafione (+3 dni) i pudło
+(jutro). Pudło z przebiegu głównego **zostaje**, bo tam SRS-u nie ruszamy
+(Sekcja 3), więc termin jest nadal dzisiejszy, a pozycja czeka w ogonie bufora.
+Cofnięcie oceny RESTARTEM przywraca poprzedni termin, więc pozycja wraca na
+listę sama. Kolejność sesji zostaje nietknięta — filtr tylko usuwa.
+
 ## Kształt danych
 
 Tabela `daily_sessions`, klucz główny `user_id`:
@@ -173,8 +210,9 @@ tylko własne wiersze i tylko dla konta `approved`, delete własnych bez warunku
 roli `authenticated`. Migracja: `0010_daily_sessions.sql`.
 
 Sprzątanie odpada: wiersz jest jeden i nadpisuje się przy starcie kolejnej
-sesji. Wczorajsza migawka po prostu leży ignorowana do czasu, aż wystartujesz
-następną — tabela ma tyle wierszy, ile kont.
+sesji. Migawka z wczoraj jest odrzucana przy hydratacji po dacie, a gdy doba
+przełamie się przy otwartej aplikacji, wiersz kasuje się od razu (D11) — tabela
+ma tyle wierszy, ile kont.
 
 ## Kolejność prac
 

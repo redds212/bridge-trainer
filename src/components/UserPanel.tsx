@@ -2,11 +2,12 @@ import { useMemo, useState, Fragment } from 'react';
 import type { Deal, SRSStore, SRSEntry, UserSettings, Attempt, LearningMode } from '../types';
 import { normalizeEntry } from '../lib/srs';
 import { generateDailySession, modeSplit, MODE_LABELS, MODE_PROPORTIONS, type DailySession } from '../lib/session';
-import { todayKey, toDateKey, formatDayKey } from '../lib/date';
+import { toDateKey, formatDayKey, dateKeyToDate } from '../lib/date';
 import { DAILY_TARGET_MIN, DAILY_TARGET_MAX } from '../hooks/useSettings';
 import { TIMED_LIMITS, formatClock } from '../hooks/useDealTimer';
 import type { HistoryStats } from '../hooks/useHistory';
 import { resumeLabel, type SessionProgress } from '../hooks/useDailySession';
+import { useDayKey } from '../hooks/useDayKey';
 import { ChangePasswordCard } from '../auth/ChangePasswordCard';
 import { InstallCard } from './InstallPrompt';
 
@@ -35,6 +36,10 @@ export function UserPanel({
   onReplay, pausedSession, pausedProgress, onStartSession, onResumeSession,
   onClearHistory, onResetProgress, onBack,
 }: Props) {
+  // Ta sama doba, na której stoi kolejka w panelu bocznym — karta „Dzisiejsza sesja”
+  // i plan powtórek muszą przełamać się o północy razem z nią, a nie dopiero po
+  // przeładowaniu (inaczej panel otwarty przez noc pokazuje wczorajszy zestaw).
+  const dayKey = useDayKey();
   const [showRepeats, setShowRepeats] = useState(true);
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
   const [confirmRestart, setConfirmRestart] = useState(false);
@@ -59,8 +64,8 @@ export function UserPanel({
   // się po każdej odpowiedzi, więc świeże generowanie zwróciłoby inną kolejkę niż
   // ta, do której wracasz (SESSION_RESUME_PLAN.md, D9).
   const preview = useMemo(
-    () => generateDailySession(deals, store, settings),
-    [deals, store, settings],
+    () => generateDailySession(deals, store, settings, dateKeyToDate(dayKey)),
+    [deals, store, settings, dayKey],
   );
   const session = pausedSession ?? preview;
   const split = modeSplit(settings);
@@ -72,7 +77,7 @@ export function UserPanel({
 
   // Future repeats grouped by review day (excludes mastered / new-unscheduled).
   const repeatsByDay = useMemo(() => {
-    const today = todayKey();
+    const today = dayKey;
     const groups = new Map<string, { id: string; title: string; wrong: boolean }[]>();
     for (const deal of deals) {
       const e = entryOf(deal.id);
@@ -88,7 +93,7 @@ export function UserPanel({
     return [...groups.entries()]
       .map(([day, items]) => ({ day, items, wrongCount: items.filter(i => i.wrong).length }))
       .sort((a, b) => (a.day < b.day ? -1 : 1));
-  }, [deals, store]);
+  }, [deals, store, dayKey]);
 
   const recentAttempts = useMemo(
     () => [...attempts].reverse().slice(0, 40),
