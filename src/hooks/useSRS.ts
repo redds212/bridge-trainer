@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import type { SRSStore, SRSEntry } from '../types';
 import type { SrsProgressRow } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
-import { getDefaultEntry, normalizeEntry, applyAnswer, finalizeBuffer, isReviewDue } from '../lib/srs';
+import { getDefaultEntry, normalizeEntry, applyAnswer, finalizeBuffer, isReviewDue, MAX_STEP } from '../lib/srs';
 
 // Re-export so existing imports (`from '../hooks/useSRS'`) keep working.
 export { getDefaultEntry, isReviewDue };
@@ -10,7 +10,7 @@ export { getDefaultEntry, isReviewDue };
 function rowToEntry(r: SrsProgressRow): SRSEntry {
   return {
     status: r.status,
-    consecutiveCorrect: Math.max(0, Math.min(4, r.consecutive_correct)) as SRSEntry['consecutiveCorrect'],
+    consecutiveCorrect: Math.max(0, Math.min(MAX_STEP, r.consecutive_correct)) as SRSEntry['consecutiveCorrect'],
     interval: r.interval,
     nextReviewDate: r.next_review_date,
     lastSeen: r.last_seen,

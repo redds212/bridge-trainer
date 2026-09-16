@@ -74,11 +74,11 @@ export interface BidAlert {
 
 export interface SRSEntry {
   status: SRSStatus;
-  /** Number of consecutive correct first-try answers (0–4). 4 = mastered. */
-  consecutiveCorrect: 0 | 1 | 2 | 3 | 4;
+  /** Consecutive correct first-try answers, capped at 5 (the last interval step). 4+ = mastered. */
+  consecutiveCorrect: 0 | 1 | 2 | 3 | 4 | 5;
   /** Current interval in days (I). */
   interval: number;
-  /** Next review day as local "YYYY-MM-DD" key, or null when mastered/new. */
+  /** Next review day as local "YYYY-MM-DD" key, or null for a new deal. */
   nextReviewDate: string | null;
   /** ISO timestamp of last attempt. */
   lastSeen: string | null;

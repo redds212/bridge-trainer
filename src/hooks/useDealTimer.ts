@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import type { GamePhase } from '../types';
 
 // Limit czasu (w sekundach) zależny od opanowania rozdania — indeks = consecutiveCorrect.
-// 0 (nowe) → 2:00, rośnie presja aż do 0:15 dla opanowanego rozdania (4).
+// 0 (nowe) → 2:00, rośnie presja aż do 0:15 dla opanowanego rozdania (4 i 5).
 export const TIMED_LIMITS = [120, 75, 45, 25, 15] as const;
 
 export function timeLimitForLevel(consecutiveCorrect: number): number {

@@ -75,13 +75,12 @@ export function UserPanel({
     [deals, store],
   );
 
-  // Future repeats grouped by review day (excludes mastered / new-unscheduled).
+  // Future repeats grouped by review day (excludes new-unscheduled).
   const repeatsByDay = useMemo(() => {
     const today = dayKey;
     const groups = new Map<string, { id: string; title: string; wrong: boolean }[]>();
     for (const deal of deals) {
       const e = entryOf(deal.id);
-      if (e.status === 'MASTERED') continue;
       const key = toDateKey(e.nextReviewDate);
       if (!key) continue;
       const dayKey = key < today ? today : key; // overdue shown under "dziś"

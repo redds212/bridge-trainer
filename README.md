@@ -8,7 +8,8 @@ Aplikacja SPA do nauki brydża oparta na systemie powtórek rozłożonych w czas
 - **Mechanika flashcard**: odtwarzanie wstępu lewia po lewi, Moment Decyzji, odsłonięcie rozwiązania
 - **System SRS** (zapisywany w `localStorage`):
   - Statusy: `NOWE → NAUKA → POWTÓRKA → OPANOWANE`
-  - Interwały: 3 dni → 7 dni → 21 dni → Archiwum
+  - Interwały: 3 → 9 → 27 → 81 → 160 dni, potem już stale co 160 — rozdanie nigdy nie odpada z powtórek
+  - Błędna odpowiedź: powtórka jutro i licznik od zera; „Opanowane" to tylko etykieta dla interwału 81+ dni
 - **Sekcja "Rekomendowane na dziś"** — automatyczny filtr rozdań do powtórki
 - **Tabela licytacji** i **box kontraktu** nakładkowe na stole
 

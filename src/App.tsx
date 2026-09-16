@@ -521,7 +521,7 @@ function RatedBanner({ entry, onNext, hasNext, filterPosition }: RatedBannerProp
     }`}>
       <div className={mastered ? 'text-brand-accent-soft' : 'text-brand-text/90'}>
         {mastered
-          ? '🏆 Opanowane! To rozdanie trafiło do archiwum.'
+          ? `🏆 Opanowane! Następna powtórka: ${nextDate}`
           : nextDate
           ? `⏰ Następna powtórka: ${nextDate}`
           : ''}

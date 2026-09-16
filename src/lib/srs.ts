@@ -2,8 +2,12 @@ import type { SRSEntry, SRSStatus } from '../types';
 import { addDaysKey, toDateKey, isOnOrBefore, todayKey } from './date';
 
 // Interval (in days) after the Nth consecutive correct answer.
-// 1st → 3, 2nd → 9, 3rd → 27, 4th → 90 (mastered).
-export const SUCCESS_INTERVALS = [3, 9, 27, 90] as const;
+// 1st → 3, 2nd → 9, 3rd → 27, 4th → 81, 5th and every later one → 160.
+// A deal never retires; a miss sends it back to the start (tomorrow).
+export const SUCCESS_INTERVALS = [3, 9, 27, 81, 160] as const;
+/** The counter stops here — past the last step the interval stays at the cap. */
+export const MAX_STEP = SUCCESS_INTERVALS.length;
+/** From this step (81+ days) a deal counts as mastered: a label for stats, not an exit. */
 export const MASTERED_STEP = 4;
 
 export function getDefaultEntry(): SRSEntry {
@@ -36,9 +40,9 @@ export function normalizeEntry(raw: unknown): SRSEntry {
         : status === 'LEARNING'
           ? 0
           : legacyStep ?? 0;
-  consecutiveCorrect = Math.max(0, Math.min(MASTERED_STEP, consecutiveCorrect)) as SRSEntry['consecutiveCorrect'];
+  consecutiveCorrect = Math.max(0, Math.min(MAX_STEP, consecutiveCorrect)) as SRSEntry['consecutiveCorrect'];
 
-  const interval =
+  let interval =
     typeof e.interval === 'number'
       ? e.interval
       : status === 'LEARNING'
@@ -46,13 +50,23 @@ export function normalizeEntry(raw: unknown): SRSEntry {
         : consecutiveCorrect > 0
           ? SUCCESS_INTERVALS[consecutiveCorrect - 1]
           : 0;
+  let nextReviewDate = toDateKey(typeof e.nextReviewDate === 'string' ? e.nextReviewDate : null);
+  const lastSeen = typeof e.lastSeen === 'string' ? e.lastSeen : null;
+
+  // Deals used to retire on mastery: step 4, no review date. Put such a deal back on
+  // the schedule as if its last answer had just earned the 81-day step.
+  if (status === 'MASTERED' && !nextReviewDate) {
+    consecutiveCorrect = MASTERED_STEP;
+    interval = SUCCESS_INTERVALS[MASTERED_STEP - 1];
+    nextReviewDate = lastSeen ? addDaysKey(interval, new Date(lastSeen)) : todayKey();
+  }
 
   return {
     status,
     consecutiveCorrect: consecutiveCorrect as SRSEntry['consecutiveCorrect'],
     interval,
-    nextReviewDate: toDateKey(typeof e.nextReviewDate === 'string' ? e.nextReviewDate : null),
-    lastSeen: typeof e.lastSeen === 'string' ? e.lastSeen : null,
+    nextReviewDate,
+    lastSeen,
     flagDifficult: e.flagDifficult === true ? true : undefined,
   };
 }
@@ -73,14 +87,13 @@ export function applyAnswer(prev: SRSEntry, correct: boolean, now: Date = new Da
       flagDifficult: entry.flagDifficult,
     };
   }
-  const step = Math.min(MASTERED_STEP, entry.consecutiveCorrect + 1) as SRSEntry['consecutiveCorrect'];
+  const step = Math.min(MAX_STEP, entry.consecutiveCorrect + 1) as SRSEntry['consecutiveCorrect'];
   const interval = SUCCESS_INTERVALS[step - 1];
-  const mastered = step === MASTERED_STEP;
   return {
-    status: mastered ? 'MASTERED' : 'REVIEW',
+    status: step >= MASTERED_STEP ? 'MASTERED' : 'REVIEW',
     consecutiveCorrect: step,
     interval,
-    nextReviewDate: mastered ? null : addDaysKey(interval, now),
+    nextReviewDate: addDaysKey(interval, now),
     lastSeen: now.toISOString(),
     flagDifficult: entry.flagDifficult,
   };
@@ -104,7 +117,6 @@ export function finalizeBuffer(prev: SRSEntry, retrySucceeded: boolean, now: Dat
 
 export function isReviewDue(entry: SRSEntry, now: Date = new Date()): boolean {
   const e = normalizeEntry(entry);
-  if (e.status === 'MASTERED') return false;
   if (e.status === 'NEW') return e.nextReviewDate === null;
   return isOnOrBefore(e.nextReviewDate, todayKey(now));
 }

@@ -113,7 +113,7 @@ function buildPools(deals: Deal[], store: SRSStore, today: string, now: Date): D
   const reviews: Deal[] = [];
   for (const deal of deals) {
     const e = entryOf(deal.id);
-    if (e.status === 'MASTERED' || e.status === 'NEW') continue;
+    if (e.status === 'NEW') continue;
     if (!isOnOrBefore(e.nextReviewDate, today)) continue;
     if (isRetryDue(e, now)) retries.push(deal);
     else reviews.push(deal);
