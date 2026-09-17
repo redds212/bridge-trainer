@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import type { SRSStore, SRSEntry } from '../types';
 import type { SrsProgressRow } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
-import { getDefaultEntry, normalizeEntry, applyAnswer, finalizeBuffer, isReviewDue, MAX_STEP } from '../lib/srs';
+import { getDefaultEntry, normalizeEntry, applyAnswer, isReviewDue, MAX_STEP } from '../lib/srs';
 
 // Re-export so existing imports (`from '../hooks/useSRS'`) keep working.
 export { getDefaultEntry, isReviewDue };
@@ -91,10 +91,6 @@ export function useSRS(userId: string | null) {
     persist(id, next);
   }, [persist]);
 
-  const finalizeBufferResult = useCallback((id: string, retrySucceeded: boolean) => {
-    mutate(id, prev => finalizeBuffer(prev, retrySucceeded));
-  }, [mutate]);
-
   // Write a specific entry (used to revert a rating to a prior snapshot).
   const setEntry = useCallback((id: string, entry: SRSEntry) => {
     const updated = { ...storeRef.current, [id]: entry };
@@ -122,5 +118,5 @@ export function useSRS(userId: string | null) {
     if (error) console.error('SRS clear-all failed:', error.message);
   }, [userId]);
 
-  return { getEntry, applyResult, applyFromSnapshot, finalizeBufferResult, setEntry, resetEntry, clearAll, store, loading };
+  return { getEntry, applyResult, applyFromSnapshot, setEntry, resetEntry, clearAll, store, loading };
 }

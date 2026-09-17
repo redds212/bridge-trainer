@@ -13,6 +13,7 @@ import { useHistory } from './hooks/useHistory';
 import { useSettings } from './hooks/useSettings';
 import { useDailySession, resumeLabel, type SessionProgress } from './hooks/useDailySession';
 import { filterDeals } from './lib/dealSearch';
+import type { DailySession } from './lib/session';
 import { Sidebar } from './components/Sidebar';
 import { LoopMark } from './components/LoopMark';
 import { BridgeTable } from './components/BridgeTable';
@@ -59,9 +60,9 @@ function AppShell() {
     userId,
     deals: dealsHook.deals,
     store: srs.store,
+    storeLoading: srs.loading,
     settings,
     applyResult: srs.applyResult,
-    finalizeBufferResult: srs.finalizeBufferResult,
     recordHistory: history.record,
   });
 
@@ -106,8 +107,11 @@ function AppShell() {
         onReplay={(id) => { session.pause(); setSelectedId(id); setView('trainer'); }}
         pausedSession={session.pausedSession}
         pausedProgress={session.pausedProgress}
+        extraSize={session.extraSize}
         onStartSession={() => { session.start(); setView('trainer'); }}
+        onStartExtra={() => { session.startExtra(); setView('trainer'); }}
         onResumeSession={() => { session.resume(); setView('trainer'); }}
+        onDiscardSession={session.discard}
         onClearHistory={history.clear}
         onResetProgress={async () => { await srs.clearAll(); history.clear(); }}
         onBack={() => setView('trainer')}
@@ -129,7 +133,10 @@ function AppShell() {
       dealDifficulties={dealDifficulties}
       onToggleDifficulty={toggleDifficulty}
       onAdmin={user.isAdmin ? () => setView('admin') : undefined}
-      onPanel={() => setView('panel')}
+      // Panel pauzuje sesję jak każde inne wyjście (D3). Inaczej karta „Dzisiejsza
+      // sesja" nie wiedziała o sesji w toku i jej przyciski startu podmieniały ją
+      // bez potwierdzenia (D16).
+      onPanel={() => { session.pause(); setView('panel'); }}
     />
   );
 }
@@ -153,7 +160,8 @@ interface TrainerProps {
   onPanel: () => void;
 }
 
-function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session, timedMode, dealQuery, onDealQueryChange, dealDifficulties, onToggleDifficulty, onAdmin, onPanel }: TrainerProps) {
+// Eksport tylko dla podglądu `?preview=session` (src/dev/SessionPreview.tsx).
+export function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session, timedMode, dealQuery, onDealQueryChange, dealDifficulties, onToggleDifficulty, onAdmin, onPanel }: TrainerProps) {
   const { getEntry } = srs;
 
   // Rekomendacje = dzisiejsza kolejka SRS, w jej kolejności. Rozdanie z kolejki może
@@ -168,12 +176,13 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
 
   // Tryb na czas: limit zależny od opanowania tego rozdania; zero → auto-odsłonięcie.
   const timerLimit = timeLimitForLevel(selectedId ? getEntry(selectedId).consecutiveCorrect : 0);
-  // Klucz resetu zawiera token sesji, bo bufor powtarza TO SAMO rozdanie: bez tego
-  // nietrafienie z przebiegu głównego (które nie zmienia `consecutiveCorrect`, więc
-  // i limitu) dawało identyczną sygnaturę biegu, zegar wracał zamrożony na zerze
-  // i powtórka była z góry przegrana. Token rośnie po każdej odpowiedzi, więc każde
-  // nowe podejście startuje świeżo. W swobodnej grze token stoi na 0, dzięki czemu
-  // RESTART nadal nie fabrykuje nowego czasu.
+  // Klucz resetu zawiera token sesji, bo to samo rozdanie potrafi wrócić na stół
+  // w nowym podejściu — choćby po wznowieniu sesji przerwanej w trakcie jego
+  // rozwiązywania. Samo id dawało wtedy identyczną sygnaturę biegu i zegar wracał
+  // zamrożony na zerze, z góry przegrany (dawniej trafiało to powtórki z bufora).
+  // Token rośnie po każdej odpowiedzi i przy wznowieniu, więc każde podejście startuje
+  // świeżo. W swobodnej grze token stoi na 0, dzięki czemu RESTART nadal nie fabrykuje
+  // nowego czasu.
   const timer = useDealTimer({
     enabled: timedMode && !!selectedDeal,
     phase: state?.phase,
@@ -218,7 +227,12 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
   const handleRate = (correct: boolean) => {
     if (!selectedId) return;
     if (session.active) {
-      session.answer(correct); // records history + SRS (main or buffer pass)
+      session.answer(correct); // records history + SRS
+      // Po ostatniej odpowiedzi rozdanie zostaje na stole pod podsumowaniem sesji.
+      // W fazie `revealed` wisiałyby pod nim przyciski oceny, a ich kliknięcie po
+      // „Zamknij" liczyło to samo rozdanie drugi raz jako swobodną grę. Po każdej
+      // innej odpowiedzi token i tak wczytuje zaraz następne rozdanie od początku.
+      setPhase('rated');
       return;
     }
     // Establish the pre-visit baseline once; always rate FROM it, so repeating the
@@ -322,7 +336,9 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
 
         {session.completed && (
           <SessionComplete
-            total={session.completed.slots.length}
+            session={session.completed}
+            extraSize={session.extraSize}
+            onStartExtra={session.startExtra}
             onClose={session.dismissCompleted}
           />
         )}
@@ -332,8 +348,11 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
             todayDeals={todayDeals}
             onSelect={handleSelect}
             pausedProgress={session.pausedProgress}
+            extraSize={session.extraSize}
             onStartSession={() => session.start()}
+            onStartExtra={session.startExtra}
             onResumeSession={() => session.resume()}
+            onDiscardSession={session.discard}
           />
         ) : (
           <>
@@ -384,39 +403,72 @@ function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session
   );
 }
 
-function SessionComplete({ total, onClose }: { total: number; onClose: () => void }) {
+function SessionComplete({ session, extraSize, onStartExtra, onClose }: {
+  session: DailySession;
+  /** Ile rozdań wylosuje kolejna partia; zero chowa przycisk. */
+  extraSize: number;
+  onStartExtra: () => void;
+  onClose: () => void;
+}) {
+  const total = session.slots.length;
+  const extra = session.type === 'extra';
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="bg-brand-panel border border-brand-line rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl slide-up">
         <div className="text-5xl mb-3">🎉</div>
-        <h2 className="text-brand-text font-bold text-xl mb-2">Sesja ukończona!</h2>
+        <h2 className="text-brand-text font-bold text-xl mb-2">{extra ? 'Partia ukończona!' : 'Sesja ukończona!'}</h2>
         <p className="text-brand-dim text-sm mb-6">
           {total > 0
-            ? `Przerobiłeś dzisiejszą pulę ${total} rozdań. Błędne wrócą jutro.`
+            ? `Przerobiłeś ${extra ? 'partię' : 'dzisiejszą pulę'} ${total} rozdań. Błędne wrócą jutro.`
+            : extra
+            ? 'Nie ma już czego losować — każde rozdanie było dziś rozwiązane.'
             : 'Brak rozdań na dziś — wszystko powtórzone!'}
         </p>
-        <button
-          onClick={onClose}
-          className="px-6 py-2.5 bg-brand-accent hover:bg-brand-accent-soft text-brand-btn-text font-display font-bold rounded-[9px] text-sm transition-colors"
-        >
-          Zamknij
-        </button>
+        {/* To jest moment, w którym chce się dalszego treningu (D14) — stąd partia
+            jako główny przycisk, gdy jest z czego losować. */}
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          {extraSize > 0 && (
+            <button
+              onClick={onStartExtra}
+              className="px-6 py-2.5 bg-brand-accent hover:bg-brand-accent-soft text-brand-btn-text font-display font-bold rounded-[9px] text-sm transition-colors"
+            >
+              🎲 Wylosuj partię ({extraSize})
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className={extraSize > 0
+              ? 'px-6 py-2.5 bg-brand-soft hover:bg-brand-line/60 text-brand-text font-medium rounded-[9px] border border-brand-line text-sm transition-colors'
+              : 'px-6 py-2.5 bg-brand-accent hover:bg-brand-accent-soft text-brand-btn-text font-display font-bold rounded-[9px] text-sm transition-colors'}
+          >
+            Zamknij
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
 function WelcomeScreen({
-  todayDeals, onSelect, pausedProgress, onStartSession, onResumeSession,
+  todayDeals, onSelect, pausedProgress, extraSize, onStartSession, onStartExtra, onResumeSession, onDiscardSession,
 }: {
   /** Dzisiejsza kolejka SRS — ta sama, którą pokazuje panel boczny. */
   todayDeals: Deal[];
   onSelect: (id: string) => void;
   pausedProgress: SessionProgress | null;
+  /** Ile rozdań wylosuje partia; zero chowa przycisk. */
+  extraSize: number;
   onStartSession: () => void;
+  onStartExtra: () => void;
   onResumeSession: () => void;
+  /** Porzuca wstrzymaną partię (D16). */
+  onDiscardSession: () => void;
 }) {
   const [confirmRestart, setConfirmRestart] = useState(false);
+  // Wstrzymanej partii nie zaczyna się „od nowa" — kończy się ją i wraca do wyboru
+  // między sesją dzienną a kolejną partią (D16).
+  const pausedExtra = pausedProgress?.type === 'extra';
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-8 text-center gap-6">
@@ -426,9 +478,11 @@ function WelcomeScreen({
           <span className="text-brand-text">Bridge</span><span className="text-brand-accent-soft">Loop</span>
         </h2>
         <p className="text-brand-dim text-sm max-w-md">
-          {pausedProgress
+          {pausedExtra
+            ? 'Masz przerwaną partię dodatkową — wróć do niej tam, gdzie ją zostawiłeś, albo ją zakończ.'
+            : pausedProgress
             ? 'Masz przerwaną sesję na dziś — wróć do niej tam, gdzie ją zostawiłeś, albo zacznij od nowa.'
-            : 'Rozpocznij dzisiejszą sesję, aby system dobrał rozdania według algorytmu powtórek, albo wybierz rozdanie z listy po lewej.'}
+            : 'Rozpocznij dzisiejszą sesję, aby system dobrał rozdania według algorytmu powtórek, wylosuj partię na dodatkowy trening albo wybierz rozdanie z listy po lewej.'}
         </p>
       </div>
 
@@ -444,14 +498,16 @@ function WelcomeScreen({
           {confirmRestart ? (
             <div className="flex flex-col items-center gap-2">
               <span className="text-brand-dim text-xs">
-                Kolejka przepadnie. Wyniki dotychczasowych rozdań zostają w historii i w powtórkach.
+                {pausedExtra
+                  ? 'Pozostałe rozdania partii przepadną. Wyniki rozwiązanych zostają w historii i w powtórkach.'
+                  : 'Kolejka przepadnie. Wyniki dotychczasowych rozdań zostają w historii i w powtórkach.'}
               </span>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => { setConfirmRestart(false); onStartSession(); }}
+                  onClick={() => { setConfirmRestart(false); if (pausedExtra) onDiscardSession(); else onStartSession(); }}
                   className="text-xs px-3 py-1.5 bg-brand-soft hover:bg-brand-line/60 text-brand-text rounded-[7px] border border-brand-line transition-colors"
                 >
-                  Tak, od nowa
+                  {pausedExtra ? 'Tak, zakończ' : 'Tak, od nowa'}
                 </button>
                 <button
                   onClick={() => setConfirmRestart(false)}
@@ -466,17 +522,27 @@ function WelcomeScreen({
               onClick={() => setConfirmRestart(true)}
               className="text-xs text-brand-dim hover:text-brand-text underline underline-offset-4 transition-colors"
             >
-              Zacznij od nowa
+              {pausedExtra ? 'Zakończ partię' : 'Zacznij od nowa'}
             </button>
           )}
         </div>
       ) : (
-        <button
-          onClick={onStartSession}
-          className="px-7 py-3 bg-brand-accent hover:bg-brand-accent-soft text-brand-btn-text font-display font-bold rounded-[9px] text-sm transition-colors shadow-lg shadow-black/30"
-        >
-          ▶ Rozpocznij dzisiejszą sesję
-        </button>
+        <div className="flex flex-col items-center gap-3">
+          <button
+            onClick={onStartSession}
+            className="px-7 py-3 bg-brand-accent hover:bg-brand-accent-soft text-brand-btn-text font-display font-bold rounded-[9px] text-sm transition-colors shadow-lg shadow-black/30"
+          >
+            ▶ Rozpocznij dzisiejszą sesję
+          </button>
+          {extraSize > 0 && (
+            <button
+              onClick={onStartExtra}
+              className="px-5 py-2 bg-brand-soft hover:bg-brand-line/60 text-brand-text font-medium rounded-[9px] border border-brand-line text-sm transition-colors"
+            >
+              🎲 Wylosuj partię ({extraSize})
+            </button>
+          )}
+        </div>
       )}
 
       {todayDeals.length > 0 && (

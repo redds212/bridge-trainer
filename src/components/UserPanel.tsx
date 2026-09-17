@@ -22,8 +22,13 @@ interface Props {
   /** Wstrzymana migawka na dziś — gdy jest, karta pokazuje ją zamiast świeżego podglądu. */
   pausedSession: DailySession | null;
   pausedProgress: SessionProgress | null;
+  /** Ile rozdań wylosuje „Wylosuj partię"; zero chowa przycisk. */
+  extraSize: number;
   onStartSession: () => void;
+  onStartExtra: () => void;
   onResumeSession: () => void;
+  /** Porzuca wstrzymaną partię (D16). */
+  onDiscardSession: () => void;
   onClearHistory: () => void;
   onResetProgress: () => void | Promise<void>;
   onBack: () => void;
@@ -33,8 +38,8 @@ const MODES: LearningMode[] = ['maintenance', 'balanced', 'intensive'];
 
 export function UserPanel({
   deals, store, settings, updateSettings, attempts, stats,
-  onReplay, pausedSession, pausedProgress, onStartSession, onResumeSession,
-  onClearHistory, onResetProgress, onBack,
+  onReplay, pausedSession, pausedProgress, extraSize, onStartSession, onStartExtra, onResumeSession,
+  onDiscardSession, onClearHistory, onResetProgress, onBack,
 }: Props) {
   // Ta sama doba, na której stoi kolejka w panelu bocznym — karta „Dzisiejsza sesja”
   // i plan powtórek muszą przełamać się o północy razem z nią, a nie dopiero po
@@ -62,12 +67,15 @@ export function UserPanel({
 
   // Podgląd „na teraz". Przy wstrzymanej sesji NIE wolno go pokazywać: SRS zmienił
   // się po każdej odpowiedzi, więc świeże generowanie zwróciłoby inną kolejkę niż
-  // ta, do której wracasz (SESSION_RESUME_PLAN.md, D9).
+  // ta, do której wracasz (SESSION_RESUME_PLAN.md, D9). Wstrzymana partia to co
+  // innego — jej sloty nie dzielą się na powtórki i nowe, więc liczniki zostają
+  // przy podglądzie sesji dziennej.
   const preview = useMemo(
     () => generateDailySession(deals, store, settings, dateKeyToDate(dayKey)),
     [deals, store, settings, dayKey],
   );
-  const session = pausedSession ?? preview;
+  const session = pausedSession?.type === 'daily' ? pausedSession : preview;
+  const pausedExtra = pausedSession?.type === 'extra';
   const split = modeSplit(settings);
 
   const masteredCount = useMemo(
@@ -147,12 +155,14 @@ export function UserPanel({
                 </button>
                 {confirmRestart ? (
                   <span className="flex items-center gap-2 text-xs">
-                    <span className="text-slate-400">Kolejka przepadnie.</span>
+                    <span className="text-slate-400">
+                      {pausedExtra ? 'Pozostałe rozdania partii przepadną.' : 'Kolejka przepadnie.'}
+                    </span>
                     <button
-                      onClick={() => { setConfirmRestart(false); onStartSession(); }}
+                      onClick={() => { setConfirmRestart(false); if (pausedExtra) onDiscardSession(); else onStartSession(); }}
                       className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-lg transition-colors"
                     >
-                      Tak, od nowa
+                      {pausedExtra ? 'Tak, zakończ' : 'Tak, od nowa'}
                     </button>
                     <button
                       onClick={() => setConfirmRestart(false)}
@@ -166,18 +176,29 @@ export function UserPanel({
                     onClick={() => setConfirmRestart(true)}
                     className="text-slate-400 hover:text-white text-xs underline underline-offset-4 transition-colors"
                   >
-                    Zacznij od nowa
+                    {pausedExtra ? 'Zakończ partię' : 'Zacznij od nowa'}
                   </button>
                 )}
               </>
             ) : (
-              <button
-                onClick={onStartSession}
-                disabled={session.slots.length === 0}
-                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold rounded-lg text-sm transition-colors shadow"
-              >
-                {session.slots.length ? `Rozpocznij sesję (${session.slots.length})` : 'Brak rozdań na dziś'}
-              </button>
+              <>
+                <button
+                  onClick={onStartSession}
+                  disabled={session.slots.length === 0}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold rounded-lg text-sm transition-colors shadow"
+                >
+                  {session.slots.length ? `Rozpocznij sesję (${session.slots.length})` : 'Brak rozdań na dziś'}
+                </button>
+                {extraSize > 0 && (
+                  <button
+                    onClick={onStartExtra}
+                    title="Rozdania wylosowane spośród nierozwiązanych dziś, w proporcji z trybu nauki"
+                    className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-100 font-semibold rounded-lg text-sm transition-colors border border-slate-600"
+                  >
+                    🎲 Wylosuj partię ({extraSize})
+                  </button>
+                )}
+              </>
             )}
             {stats.solvedToday > 0 && (
               <span className="text-emerald-400/80 text-xs">Dziś rozwiązano: {stats.solvedToday}</span>

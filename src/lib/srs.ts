@@ -72,8 +72,9 @@ export function normalizeEntry(raw: unknown): SRSEntry {
 }
 
 /**
- * Apply a first-try answer in the MAIN session (Section 4 of the spec for
- * success; Section 3 step-2 for an immediate miss).
+ * Apply an answer — in a session or in free play (Section 4 of the spec for
+ * success). A miss is final right away: the deal returns tomorrow with the
+ * counter reset, never later in the same session (SESSION_RESUME_PLAN.md, D13).
  */
 export function applyAnswer(prev: SRSEntry, correct: boolean, now: Date = new Date()): SRSEntry {
   const entry = normalizeEntry(prev);
@@ -99,22 +100,6 @@ export function applyAnswer(prev: SRSEntry, correct: boolean, now: Date = new Da
   };
 }
 
-/**
- * Finalize a deal that went through the session buffer (Section 3, step 4):
- * regardless of the retry result it returns tomorrow with the counter reset.
- * `retrySucceeded === false` flags it as difficult.
- */
-export function finalizeBuffer(prev: SRSEntry, retrySucceeded: boolean, now: Date = new Date()): SRSEntry {
-  return {
-    status: 'LEARNING',
-    consecutiveCorrect: 0,
-    interval: 1,
-    nextReviewDate: addDaysKey(1, now),
-    lastSeen: now.toISOString(),
-    flagDifficult: retrySucceeded ? undefined : true,
-  };
-}
-
 export function isReviewDue(entry: SRSEntry, now: Date = new Date()): boolean {
   const e = normalizeEntry(entry);
   if (e.status === 'NEW') return e.nextReviewDate === null;
@@ -125,4 +110,12 @@ export function isReviewDue(entry: SRSEntry, now: Date = new Date()): boolean {
 export function isRetryDue(entry: SRSEntry, now: Date = new Date()): boolean {
   const e = normalizeEntry(entry);
   return e.status === 'LEARNING' && e.interval === 1 && isOnOrBefore(e.nextReviewDate, todayKey(now));
+}
+
+/**
+ * Rozdanie ocenione dziś — w sesji, w partii albo w swobodnej grze. Tego samego dnia
+ * już nie wraca: pudło czeka do jutra, trafienie na swój interwał (D13).
+ */
+export function isAnsweredToday(entry: SRSEntry, now: Date = new Date()): boolean {
+  return toDateKey(normalizeEntry(entry).lastSeen) === todayKey(now);
 }

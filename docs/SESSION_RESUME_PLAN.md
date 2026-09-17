@@ -4,6 +4,10 @@ Data ustaleń: 2026-08-09. Status: **zaimplementowane w kodzie; czeka na migracj
 `0010_daily_sessions.sql` w Supabase** — do czasu jej uruchomienia zapytania o
 migawkę kończą się błędem w konsoli, a sesja działa jak dotąd (bez wznawiania).
 
+Aktualizacja 2026-09-17: **bufor poprawek usunięty** — pudło idzie od razu na jutro
+(D13, zastępuje D5 i D6) — oraz **dodatkowa partia** na wylosowanych rozdaniach
+(D14–D16). Bez nowej migracji.
+
 ## Problem
 
 Sesja dzienna żyje wyłącznie w pamięci. `Runtime` w
@@ -89,6 +93,8 @@ Gdy pula jest wyczerpana, sesja po prostu jest krótsza od celu.
 
 ### D5. Wejście w bufor zamyka przebieg główny
 
+> **Nieaktualne od 2026-09-17** — bufora poprawek nie ma (D13).
+
 Od momentu przejścia do bufora błędów **nic się już nie dopisuje** — zmiana celu
 działa dopiero od następnej sesji. Chcesz więcej rozdań: kończysz i startujesz
 nową.
@@ -100,6 +106,9 @@ przebiegu głównym kontra `finalizeBuffer` w buforze, gdzie wynik zawsze resetu
 licznik i wystawia rozdanie na jutro.
 
 ### D6. W buforze nie ma pauzy, ale migawka nadal się zapisuje
+
+> **Nieaktualne od 2026-09-17** — bufora poprawek nie ma (D13). Opisany niżej
+> „cichy wyciek" zniknął razem z nim: pudło trafia do SRS-u w chwili odpowiedzi.
 
 W fazie bufora pasek nie oferuje wyjścia (przycisk „Przerwij" znika). Bufor idzie
 na raz. Zapis migawki jednak trwa, więc awaryjne zamknięcie karty, odświeżenie
@@ -178,12 +187,113 @@ odpowiada na inne pytanie: *co jest jeszcze do zrobienia dziś*. Migawka zmienia
 się wyłącznie od odpowiedzi udzielonych w sesji, więc bez filtru rozdanie
 rozwiązane przy pauzie wisiało na liście do końca dnia.
 
-Dlatego `todayQueue` przepuszcza resztę migawki przez `isReviewDue` z aktualnym
-`store`. Wypada to, co SRS przestawił na później — trafione (+3 dni) i pudło
-(jutro). Pudło z przebiegu głównego **zostaje**, bo tam SRS-u nie ruszamy
-(Sekcja 3), więc termin jest nadal dzisiejszy, a pozycja czeka w ogonie bufora.
-Cofnięcie oceny RESTARTEM przywraca poprzedni termin, więc pozycja wraca na
-listę sama. Kolejność sesji zostaje nietknięta — filtr tylko usuwa.
+Dlatego `todayQueue` przepuszcza resztę migawki przez `isAnsweredToday` z
+aktualnym `store`: wypada wszystko, co dziś już oceniono — trafione i pudło, bo
+żadne z nich dziś nie wraca (D13). Ten sam filtr działa dla partii, której sloty
+bywają przed terminem, więc sprawdzanie terminu (`isReviewDue`, jak do 2026-09-17)
+wyrzucałoby je z listy od razu. Cofnięcie oceny RESTARTEM przywraca poprzedni
+wpis razem z `lastSeen`, więc pozycja wraca na listę sama. Kolejność sesji zostaje
+nietknięta — filtr tylko usuwa.
+
+## Zmiany z 2026-09-17
+
+### D13. Pudło idzie od razu na jutro — bez bufora poprawek
+
+Dotąd nietrafione rozdanie z przebiegu głównego wracało pod koniec tej samej sesji
+w buforze („🔁 Bufor sesji"), a kara (`finalizeBuffer`: jutro, licznik od zera)
+zapadała dopiero tam. Teraz `answer` stosuje `applyAnswer` od razu, dla obu wyników:
+pudło dostaje powtórkę na jutro i licznik od zera w chwili kliknięcia, a sesja idzie
+dalej. Jutro rozdanie wchodzi do kolejki jako retry, z najwyższym priorytetem. Tego
+samego dnia ocenione rozdanie już nie wraca — ani w sesji, ani w partii (D14), ani na
+liście rekomendacji (D12).
+
+Skutki:
+
+- sesja ma jedną fazę: znikają „🔁 Bufor sesji", „Wznów poprawki", `finalizeBuffer`
+  i `inBuffer` w migawce, a „Przerwij" działa do ostatniego rozdania (D5 i D6
+  nieaktualne);
+- zniknął cichy wyciek z D6 — porzucona sesja nie zostawia pudeł bez kary;
+- `flagDifficult` nie ma już kto ustawiać; flaga tylko przechodzi dalej przy
+  kolejnych ocenach, a w historii zostają dawne próby z `phase: 'buffer'`;
+- kolumny `buffer`, `buffer_index`, `in_buffer` zostają w tabeli (bez migracji)
+  i są zapisywane puste. Upsert nadpisuje tylko podane pola, więc bez tego stan
+  zostawiony przez starszą wersję przetrwałby w wierszu.
+
+**Przejście.** Migawka zapisana przez starszą wersję może nieść w buforze pudła, którym
+nikt już nie wymierzy kary. Przy wczytaniu dzisiejszego wiersza `pendingBufferMisses`
+wybiera niedomknięte (w fazie bufora — od `buffer_index`), a hook, gdy wczyta się SRS,
+stosuje im `applyAnswer(…, false)`. Pomija rozdania z `lastSeen` świeższym niż
+`updated_at` migawki: oceniono je już po jej zapisie (swobodna gra przy pauzie albo
+kara z poprzedniego wczytania), więc ponowne wczytanie tego samego wiersza nie karze
+drugi raz. Wiersz zapisany w fazie bufora ma wyczerpany przebieg główny, więc nie ma
+już czego wznawiać.
+
+### D14. Dodatkowa partia: skład
+
+„🎲 Wylosuj partię (N)" otwiera zwartą sesję na wylosowanych rozdaniach — dalszy
+trening po sesji dziennej. `generateExtraSession`:
+
+- **rozmiar** = cel dzienny; mniejszy, gdy pula się kończy. Liczba na przycisku to
+  faktyczny rozmiar (`extraBatchSize`);
+- **pula** = rozdania nieocenione dziś (`isAnsweredToday`), więc kolejne partie tego
+  samego dnia nie powtarzają ani siebie nawzajem, ani sesji dziennej;
+- **proporcja** nowe/powtórki z trybu nauki (`modeSplit`), jak w sesji dziennej —
+  inaczej skład zależałby od tego, czego akurat więcej w bibliotece. Niedobór jednej
+  puli dopełnia druga;
+- wśród powtórek **pierwszeństwo mają zaległe** (odłożone ponad dzienny limit). Te
+  przed terminem dochodzą dopiero potem, bo trafienie wydłuża interwał tak samo jak
+  w terminie, choć rozdanie nie odczekało jeszcze swojego;
+- wybór i kolejność są losowe i świeże przy każdym kliknięciu. Partia nie ma
+  podglądu, z którym musiałaby się zgadzać, więc ziarno z daty (jak dla nowych
+  w sesji dziennej) nie jest potrzebne.
+
+Odpowiedzi w partii liczą się w SRS i historii dokładnie jak w sesji dziennej — tak
+samo jak ocena w swobodnej grze. W historii mają `phase: 'main'`: ograniczenie
+`attempts.phase` w bazie innej wartości nie przepuści, a nowa wymagałaby migracji.
+
+Odrzucone:
+
+- losowanie z całej biblioteki bez proporcji i bez pierwszeństwa zaległych — przy
+  wielu powtórkach przed terminem partie masowo rozciągałyby interwały;
+- partia bez wpływu na SRS — nowe rozdanie przerobione w partii zostałoby „nowe"
+  i wróciło jutro w sesji dziennej jak nieznane, a pudło nie trafiłoby na jutro.
+
+### D15. Partia w migawce
+
+Partia używa tego samego wiersza `daily_sessions` i tych samych mechanizmów: zapis po
+każdej odpowiedzi, pauza, „Wznów partię (2 / 5)", wygaśnięcie o północy (D11),
+przeskakiwanie zarchiwizowanych (D7). Typ (`DailySession.type`: `'daily' | 'extra'`)
+nie ma własnej kolumny — sloty partii mają `kind: 'extra'` i po nim `sessionFromSlots`
+rozpoznaje partię wczytaną z bazy. Bez migracji, więc wdrożenie nie czeka na SQL Editor.
+
+Zmiana celu dziennego albo trybu **nie przelicza** partii (D4 dotyczy tylko sesji
+dziennej): partia to stała liczba wylosowanych rozdań, a dopychanie brałoby z pul
+sesji dziennej. Pasek partii jest bursztynowy („🎲 Partia dodatkowa", dawny kolor
+bufora), żeby nie mylił się z sesją dzienną.
+
+### D16. Kiedy można wylosować partię
+
+Przycisk stoi tam, gdzie start sesji, i tylko wtedy, gdy nic nie trwa ani nie czeka
+wstrzymane — jeden wiersz na konto znaczy, że nowa partia zastąpiłaby wstrzymaną sesję:
+
+- w podsumowaniu („Sesja ukończona!" / „Partia ukończona!") jako główny przycisk — to
+  moment, w którym chce się dalszego treningu. Gdy nie ma czego losować, zostaje samo
+  „Zamknij";
+- na ekranie powitalnym i w karcie „Dzisiejsza sesja" w panelu — obok startu sesji
+  dziennej.
+
+Wstrzymanej partii nie zaczyna się „od nowa". Zamiast tego jest „Zakończ partię" (z tym
+samym dwustopniowym potwierdzeniem): porzuca resztę kolejki i wraca do wyboru między
+sesją dzienną a kolejną partią. Restart tego samego rodzaju odciąłby drogę do sesji
+dziennej komuś, kto wylosował partię, zanim ją zrobił.
+
+Przy okazji dwa uszczelnienia w tym samym przepływie:
+
+- wejście do panelu pauzuje sesję jak każde inne wyjście (D3). Wcześniej karta nie
+  wiedziała o sesji w toku, a jej przyciski startu podmieniały ją bez potwierdzenia;
+- po odpowiedzi w sesji rozdanie przechodzi w fazę `rated`. Po ostatniej odpowiedzi
+  zostaje na stole pod podsumowaniem, a dotąd wisiały pod nim przyciski oceny —
+  kliknięcie ich po „Zamknij" liczyło to samo rozdanie drugi raz jako swobodną grę.
 
 ## Kształt danych
 
@@ -193,11 +303,11 @@ Tabela `daily_sessions`, klucz główny `user_id`:
 | --- | --- | --- |
 | `user_id` | `uuid` | klucz główny; FK do `auth.users`, kaskada przy usunięciu konta |
 | `date` | `date` | doba lokalna migawki, porównywana po stronie klienta z `todayKey()` |
-| `slots` | `jsonb` | migawka kolejki: `[{ dealId, kind }]` |
+| `slots` | `jsonb` | migawka kolejki: `[{ dealId, kind }]`; `kind: 'extra'` = partia (D15) |
 | `idx` | `int` | wskaźnik w przebiegu głównym (`index` jest słowem zastrzeżonym w SQL) |
-| `buffer` | `jsonb` | `dealId[]` nietrafionych w przebiegu głównym |
-| `buffer_index` | `int` | wskaźnik w buforze |
-| `in_buffer` | `bool` | faza sesji |
+| `buffer` | `jsonb` | ~~`dealId[]` nietrafionych w przebiegu głównym~~ — od D13 zawsze `[]` |
+| `buffer_index` | `int` | ~~wskaźnik w buforze~~ — od D13 zawsze `0` |
+| `in_buffer` | `bool` | ~~faza sesji~~ — od D13 zawsze `false` |
 | `deferred_review_ids` | `jsonb` | `dealId[]` — źródło dopisywania z D4 |
 | `target` | `int` | cel dzienny obowiązujący migawkę (do wykrycia zmiany) |
 | `mode` | `text` | tryb nauki obowiązujący migawkę |
@@ -252,6 +362,23 @@ o migawkę kończy się błędem w konsoli i sesja startuje od zera.
 - Aplikacja startuje bez błędów w konsoli.
 - **Niezweryfikowane end-to-end**: sam przepływ wznawiania wymaga uruchomionej
   migracji i zalogowanego konta.
+
+Zmiany z 2026-09-17 (D13–D16):
+
+- `tsc -b` i `npm run build` — czysto; lint bez nowych uwag; podglądu nie ma
+  w produkcyjnym bundlu.
+- 51 sprawdzeń czystej logiki: pudło → jutro i retry nazajutrz, żadne odpowiedziane
+  rozdanie nie wraca tego samego dnia, skład partii w trzech trybach przez 200
+  losowań, pierwszeństwo zaległych, dopełnianie niedoborów, krótsza i pusta partia,
+  trzy partie z rzędu bez powtórek, typ z `kind` slotów, kara dla starego bufora
+  (także idempotentność i format daty z Postgresa). Trzy celowe mutacje kodu —
+  wszystkie wykryte.
+- Przepływ w podglądzie `?preview=session` (prawdziwe hooki w pamięci): sesja
+  dzienna z pudłami bez rundy poprawek, podsumowanie z „Wylosuj partię", partia,
+  pauza i wznowienie, pauza przy wejściu do panelu, zmiana celu przy wstrzymanej
+  partii, „Zakończ partię", regres „Zacznij od nowa"; układ na 375 px.
+- **Niezweryfikowane end-to-end**: kara dla starego bufora na prawdziwym wierszu
+  z bazy — sprawdzona tylko czysta funkcja `pendingBufferMisses`.
 
 ## Rozstrzygnięte w trakcie wdrożenia
 

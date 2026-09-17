@@ -82,7 +82,11 @@ export interface SRSEntry {
   nextReviewDate: string | null;
   /** ISO timestamp of last attempt. */
   lastSeen: string | null;
-  /** Marked when a deal was missed again inside the session buffer. */
+  /**
+   * Ślad po buforze poprawek: rozdanie przepadło drugi raz w tej samej sesji. Bufora
+   * już nie ma (SESSION_RESUME_PLAN.md, D13), więc nic tej flagi nie ustawia — tylko
+   * przechodzi dalej przy kolejnych ocenach.
+   */
   flagDifficult?: boolean;
 }
 
@@ -98,6 +102,7 @@ export interface UserSettings {
   timedMode: boolean;
 }
 
+/** `main` — odpowiedź w sesji albo partii; `buffer` zostaje tylko w dawnej historii (D13). */
 export type AttemptPhase = 'main' | 'buffer' | 'free';
 
 export interface Attempt {

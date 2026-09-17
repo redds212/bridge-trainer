@@ -1,8 +1,16 @@
 import type { Deal, SRSStore, UserSettings, LearningMode } from '../types';
-import { normalizeEntry, isRetryDue } from './srs';
+import type { DailySessionRow } from './database.types';
+import { normalizeEntry, isRetryDue, isAnsweredToday } from './srs';
 import { todayKey, toDateKey, isOnOrBefore } from './date';
 
-export type SessionKind = 'retry' | 'review' | 'new';
+/**
+ * Po co rozdanie jest w kolejce. `extra` — wylosowane do dodatkowej partii (D14);
+ * po nim partię poznajemy w migawce wczytanej z bazy, bez osobnej kolumny (D15).
+ */
+export type SessionKind = 'retry' | 'review' | 'new' | 'extra';
+
+/** Sesja dzienna wg powtórek albo dodatkowa partia na wylosowanych rozdaniach (D14). */
+export type SessionType = 'daily' | 'extra';
 
 export interface SessionSlot {
   dealId: string;
@@ -11,6 +19,7 @@ export interface SessionSlot {
 
 export interface DailySession {
   date: string; // todayKey
+  type: SessionType;
   slots: SessionSlot[];
   retryCount: number;
   reviewCount: number;
@@ -185,7 +194,8 @@ function fillToTarget(slots: SessionSlot[], pools: DuePools, settings: UserSetti
 
 /**
  * Składa `DailySession` z gotowej listy slotów. Liczniki są zawsze przeliczane
- * ze slotów, żeby migawka wczytana z bazy nie mogła się z nimi rozjechać.
+ * ze slotów, żeby migawka wczytana z bazy nie mogła się z nimi rozjechać. Typ też
+ * wynika ze slotów (D15) — jawnie podaje się go tylko dla kolejki bez slotów.
  */
 export function sessionFromSlots(
   date: string,
@@ -193,9 +203,11 @@ export function sessionFromSlots(
   deferredReviewIds: string[],
   target: number,
   mode: LearningMode,
+  type: SessionType = slots.some(s => s.kind === 'extra') ? 'extra' : 'daily',
 ): DailySession {
   return {
     date,
+    type,
     slots,
     retryCount: slots.filter(s => s.kind === 'retry').length,
     reviewCount: slots.filter(s => s.kind === 'review').length,
@@ -215,6 +227,7 @@ function finish(date: string, slots: SessionSlot[], pools: DuePools, settings: U
     pools.reviews.filter(id => !queued.has(id)),
     Math.max(0, Math.floor(settings.dailyTarget)),
     settings.mode,
+    'daily',
   );
 }
 
@@ -251,4 +264,85 @@ export function adaptSession(
   const pools = buildPools(deals, store, today, now);
   const keep = Math.max(keepMin, Math.min(prev.slots.length, target));
   return finish(today, fillToTarget(prev.slots.slice(0, keep), pools, settings), pools, settings);
+}
+
+/**
+ * Pula dodatkowej partii: wszystko, czego dziś jeszcze nie rozwiązywano. Co dziś już
+ * było, dziś nie wraca — pudło czeka do jutra, trafienie na swój interwał (D13) — więc
+ * kolejne partie tego samego dnia też się ze sobą nie powtarzają.
+ */
+function extraCandidates(deals: Deal[], store: SRSStore, now: Date): Deal[] {
+  return deals.filter(d => !isAnsweredToday(normalizeEntry(store[d.id]), now));
+}
+
+/** Ile rozdań wylosuje dodatkowa partia — licznik na przycisku „Wylosuj partię". */
+export function extraBatchSize(deals: Deal[], store: SRSStore, settings: UserSettings, now: Date = new Date()): number {
+  return Math.min(Math.max(0, Math.floor(settings.dailyTarget)), extraCandidates(deals, store, now).length);
+}
+
+/**
+ * Dodatkowa partia (D14): tyle rozdań, ile wynosi cel dzienny, wylosowanych spośród
+ * nierozwiązanych dziś. Proporcję nowe/powtórki bierze z trybu nauki, tak jak sesja
+ * dzienna — inaczej skład partii zależałby od tego, czego akurat więcej w bibliotece.
+ * Niedobór jednej puli dopełnia druga.
+ *
+ * Wśród powtórek pierwszeństwo mają zaległe, czyli odłożone ponad dzienny limit.
+ * Po te przed terminem sięgamy dopiero potem: trafienie wydłuża interwał tak samo jak
+ * w terminie, choć rozdanie nie odczekało jeszcze swojego.
+ *
+ * Losowanie jest świeże przy każdym wywołaniu — partia, inaczej niż sesja dzienna,
+ * nie ma podglądu, z którym musiałaby się zgadzać. `rand` podmieniają testy.
+ */
+export function generateExtraSession(
+  deals: Deal[],
+  store: SRSStore,
+  settings: UserSettings,
+  now: Date = new Date(),
+  rand: () => number = Math.random,
+): DailySession {
+  const today = todayKey(now);
+  const X = Math.max(0, Math.floor(settings.dailyTarget));
+  const { reviewLimit } = modeSplit(settings);
+
+  const fresh: string[] = [];
+  const due: string[] = [];
+  const ahead: string[] = [];
+  for (const deal of extraCandidates(deals, store, now)) {
+    const e = normalizeEntry(store[deal.id]);
+    if (e.status === 'NEW') fresh.push(deal.id);
+    else if (isOnOrBefore(e.nextReviewDate, today)) due.push(deal.id);
+    else ahead.push(deal.id);
+  }
+
+  const reviews = [...shuffled(due, rand), ...shuffled(ahead, rand)];
+  const news = shuffled(fresh, rand);
+  const reviewTake = Math.min(reviewLimit, reviews.length);
+  const picked = [...reviews.slice(0, reviewTake), ...news.slice(0, X - reviewTake)];
+  picked.push(...reviews.slice(reviewTake, reviewTake + X - picked.length));
+
+  // Kolejność też losowa: powtórki i nowe się przeplatają, zamiast iść blokami.
+  const slots = shuffled(picked, rand).map((dealId): SessionSlot => ({ dealId, kind: 'extra' }));
+  return sessionFromSlots(today, slots, [], X, settings.mode, 'extra');
+}
+
+/**
+ * Pudła, które starsza wersja odłożyła do bufora poprawek, a bufor ich nie domknął —
+ * SRS takiego rozdania wciąż stoi sprzed odpowiedzi, a bufora, który by go ukarał, już
+ * nie ma (D13). Migawka zapisuje się po każdej odpowiedzi, więc rozdanie z `lastSeen`
+ * świeższym niż `updated_at` oceniono już później (swobodna gra przy pauzie albo kara
+ * z poprzedniego wczytania) i zostawiamy je w spokoju. Dzięki temu ponowne wczytanie
+ * tego samego wiersza nie karze drugi raz.
+ */
+export function pendingBufferMisses(
+  row: Pick<DailySessionRow, 'buffer' | 'buffer_index' | 'in_buffer' | 'updated_at'>,
+  store: SRSStore,
+): string[] {
+  const buffer = Array.isArray(row.buffer) ? row.buffer : [];
+  // W fazie bufora pozycje przed `buffer_index` bufor zdążył już domknąć.
+  const waiting = row.in_buffer ? buffer.slice(Math.max(0, row.buffer_index)) : buffer;
+  const savedAt = Date.parse(row.updated_at);
+  return waiting.filter(id => {
+    const seen = normalizeEntry(store[id]).lastSeen;
+    return !seen || Date.parse(seen) < savedAt;
+  });
 }

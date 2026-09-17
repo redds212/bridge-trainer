@@ -3,16 +3,16 @@ import type { Deal, SRSStore, UserSettings, AttemptPhase } from '../types';
 import type { DailySessionRow } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
 import { todayKey, toDateKey, dateKeyToDate } from '../lib/date';
-import { generateDailySession, adaptSession, sessionFromSlots, type DailySession } from '../lib/session';
-import { normalizeEntry, isReviewDue } from '../lib/srs';
+import {
+  generateDailySession, generateExtraSession, extraBatchSize, adaptSession, sessionFromSlots,
+  pendingBufferMisses, type DailySession, type SessionType,
+} from '../lib/session';
+import { normalizeEntry, isAnsweredToday } from '../lib/srs';
 import { useDayKey } from './useDayKey';
 
 interface Runtime {
   session: DailySession;
-  index: number;        // pointer into main slots
-  buffer: string[];     // dealIds missed in the main pass
-  inBuffer: boolean;
-  bufferIndex: number;
+  index: number;        // pointer into slots
   token: number;        // bumps on every answer to force a deal reload
 }
 
@@ -20,40 +20,30 @@ interface Args {
   userId: string | null;
   deals: Deal[];
   store: SRSStore;
+  /** `store` jeszcze się wczytuje — kara dla pudeł ze starego bufora musi na niego poczekać. */
+  storeLoading: boolean;
   settings: UserSettings;
   applyResult: (id: string, correct: boolean) => void;
-  finalizeBufferResult: (id: string, retrySucceeded: boolean) => void;
   recordHistory: (id: string, correct: boolean, phase: AttemptPhase) => void;
 }
 
 export interface SessionProgress {
-  inBuffer: boolean;
-  mainDone: number;
-  mainTotal: number;
-  bufferDone: number;
-  bufferTotal: number;
+  type: SessionType;
+  done: number;
+  total: number;
 }
 
-/** Etykieta przycisku wznowienia — bufor liczy się osobno od przebiegu głównego. */
+/** Etykieta przycisku wznowienia — sesja i partia wracają tym samym przyciskiem. */
 export function resumeLabel(p: SessionProgress): string {
-  return p.inBuffer
-    ? `🔁 Wznów poprawki (${p.bufferDone} / ${p.bufferTotal})`
-    : `▶ Wznów sesję (${p.mainDone} / ${p.mainTotal})`;
+  return `▶ Wznów ${p.type === 'extra' ? 'partię' : 'sesję'} (${p.done} / ${p.total})`;
 }
 
 function toProgress(rt: Runtime): SessionProgress {
-  return {
-    inBuffer: rt.inBuffer,
-    mainDone: rt.inBuffer ? rt.session.slots.length : rt.index,
-    mainTotal: rt.session.slots.length,
-    bufferDone: rt.bufferIndex,
-    bufferTotal: rt.buffer.length,
-  };
+  return { type: rt.session.type, done: rt.index, total: rt.session.slots.length };
 }
 
 function rowToRuntime(r: DailySessionRow): Runtime {
   const slots = Array.isArray(r.slots) ? r.slots : [];
-  const buffer = Array.isArray(r.buffer) ? r.buffer : [];
   const session = sessionFromSlots(
     toDateKey(r.date) ?? r.date,
     slots,
@@ -61,14 +51,7 @@ function rowToRuntime(r: DailySessionRow): Runtime {
     r.target,
     r.mode,
   );
-  return {
-    session,
-    index: Math.max(0, Math.min(r.idx, slots.length)),
-    buffer,
-    inBuffer: r.in_buffer,
-    bufferIndex: Math.max(0, Math.min(r.buffer_index, buffer.length)),
-    token: 1,
-  };
+  return { session, index: Math.max(0, Math.min(r.idx, slots.length)), token: 1 };
 }
 
 function runtimeToRow(userId: string, rt: Runtime): DailySessionRow {
@@ -77,9 +60,12 @@ function runtimeToRow(userId: string, rt: Runtime): DailySessionRow {
     date: rt.session.date,
     slots: rt.session.slots,
     idx: rt.index,
-    buffer: rt.buffer,
-    buffer_index: rt.bufferIndex,
-    in_buffer: rt.inBuffer,
+    // Bufora już nie ma (D13), ale kolumny zostały. Upsert nadpisuje tylko podane
+    // pola, więc bez jawnych zer stan zostawiony przez starszą wersję przetrwałby
+    // w wierszu i wracał przy każdym wczytaniu.
+    buffer: [],
+    buffer_index: 0,
+    in_buffer: false,
     deferred_review_ids: rt.session.deferredReviewIds,
     target: rt.session.target,
     mode: rt.session.mode,
@@ -92,22 +78,14 @@ function runtimeToRow(userId: string, rt: Runtime): DailySessionRow {
  * Wydzielone z `answer`, bo tą samą drogą idzie przeskakiwanie rozdań, które
  * zniknęły z puli — tam nie wolno tknąć SRS-u ani historii.
  */
-function advance(rt: Runtime, toBuffer: boolean): Runtime | 'done' {
-  if (!rt.inBuffer) {
-    const id = rt.session.slots[rt.index]?.dealId;
-    const buffer = toBuffer && id ? [...rt.buffer, id] : rt.buffer;
-    const index = rt.index + 1;
-    if (index < rt.session.slots.length) return { ...rt, index, buffer, token: rt.token + 1 };
-    if (buffer.length) return { ...rt, index, buffer, inBuffer: true, bufferIndex: 0, token: rt.token + 1 };
-    return 'done';
-  }
-  const bufferIndex = rt.bufferIndex + 1;
-  if (bufferIndex >= rt.buffer.length) return 'done';
-  return { ...rt, bufferIndex, token: rt.token + 1 };
+function advance(rt: Runtime): Runtime | 'done' {
+  const index = rt.index + 1;
+  return index < rt.session.slots.length ? { ...rt, index, token: rt.token + 1 } : 'done';
 }
 
 /**
- * Sesja dzienna z migawką w bazie (`daily_sessions`) — patrz docs/SESSION_RESUME_PLAN.md.
+ * Sesja dzienna i dodatkowa partia z migawką w bazie (`daily_sessions`) — patrz
+ * docs/SESSION_RESUME_PLAN.md.
  *
  * Stan trzymamy w dwóch osobnych miejscach: `runtime` to sesja, w której właśnie
  * jesteś, `paused` to wstrzymana migawka czekająca na „Wznów". Rozdzielenie jest
@@ -115,11 +93,14 @@ function advance(rt: Runtime, toBuffer: boolean): Runtime | 'done' {
  * wczytana z bazy ląduje jako `paused`, a nie jako aktywny przebieg.
  */
 export function useDailySession(args: Args) {
-  const { userId, deals, store, settings, applyResult, finalizeBufferResult, recordHistory } = args;
+  const { userId, deals, store, storeLoading, settings, applyResult, recordHistory } = args;
   const [runtime, setRuntime] = useState<Runtime | null>(null);
   const [paused, setPaused] = useState<Runtime | null>(null);
   const [completed, setCompleted] = useState<DailySession | null>(null);
   const [loading, setLoading] = useState(true);
+  // Dzisiejszy wiersz zapisany przez starszą wersję, w którego buforze mogły zostać
+  // pudła bez kary (D13). Czeka tu, aż wczyta się SRS.
+  const [legacyRow, setLegacyRow] = useState<DailySessionRow | null>(null);
   // Doba, na którą pracuje kolejka. Każde przeliczenie w tym hooku dostaje `now`
   // z tego klucza, więc podgląd, `start()` i migawka mówią o tym samym dniu.
   const dayKey = useDayKey();
@@ -142,23 +123,38 @@ export function useDailySession(args: Args) {
   // Hydratacja przy logowaniu. Migawka z innego dnia jest ignorowana (D2) —
   // zostanie nadpisana przy pierwszym starcie, więc nie ma czego sprzątać.
   useEffect(() => {
-    if (!userId) { setRuntime(null); setPaused(null); setLoading(false); return; }
+    if (!userId) { setRuntime(null); setPaused(null); setLegacyRow(null); setLoading(false); return; }
     let active = true;
     setLoading(true);
     supabase.from('daily_sessions').select('*').eq('user_id', userId).maybeSingle()
       .then(({ data, error }) => {
         if (!active) return;
         if (error) console.error('Session load failed:', error.message);
-        const fresh = data && toDateKey(data.date) === todayKey() && data.slots?.length
-          ? rowToRuntime(data)
-          : null;
+        const row = data && toDateKey(data.date) === todayKey() ? data : null;
+        const snap = row?.slots?.length ? rowToRuntime(row) : null;
+        // Wiersz ze starszej wersji zapisany w buforze ma wyczerpany przebieg główny —
+        // bez bufora nie zostaje w nim nic do wznowienia.
+        const fresh = snap && snap.index < snap.session.slots.length ? snap : null;
         syncedRef.current = fresh; // to, co właśnie wczytaliśmy, już jest w bazie
+        setLegacyRow(row?.buffer?.length ? row : null);
         setPaused(fresh);
         setRuntime(null);
         setLoading(false);
       });
     return () => { active = false; };
   }, [userId]);
+
+  // Pudła, które starsza wersja odłożyła do bufora, dostają karę, jakiej bufor nie
+  // zdążył wymierzyć (D13) — tak jakby padły już po zmianie. Czekamy na SRS, bo
+  // `applyResult` liczy z bieżącego wpisu, a wczytanie `store` po fakcie nadpisałoby
+  // wynik policzony z pustego. Ponowne wczytanie tego samego wiersza nic nie psuje:
+  // `pendingBufferMisses` pomija rozdania ocenione po zapisie migawki.
+  const punishedRef = useRef<DailySessionRow | null>(null);
+  useEffect(() => {
+    if (storeLoading || !legacyRow || punishedRef.current === legacyRow) return;
+    punishedRef.current = legacyRow;
+    for (const id of pendingBufferMisses(legacyRow, storeRef.current)) applyResult(id, false);
+  }, [storeLoading, legacyRow, applyResult]);
 
   // Przełom doby (00:00 czasu lokalnego). Kolejka jest „na dziś”, więc wczorajsza
   // sesja przestaje obowiązywać niezależnie od tego, ile z niej zostało: migawka
@@ -195,19 +191,27 @@ export function useDailySession(args: Args) {
     clearRow(); // ukończonej sesji nie ma po co wznawiać
   }, [clearRow]);
 
-  const start = useCallback(() => {
-    const session = generateDailySession(deals, store, settings, dayNow);
+  /** Start gotowej kolejki — sesji dziennej albo partii. Zastępuje wstrzymaną migawkę. */
+  const begin = useCallback((session: DailySession) => {
     setCompleted(null);
     setPaused(null);
     if (!session.slots.length) {
       setCompleted(session); // nothing to do — surface an empty summary
       setRuntime(null);
       clearRow();
-      return session;
+      return;
     }
-    setRuntime({ session, index: 0, buffer: [], inBuffer: false, bufferIndex: 0, token: 1 });
-    return session;
-  }, [deals, store, settings, dayNow, clearRow]);
+    setRuntime({ session, index: 0, token: 1 });
+  }, [clearRow]);
+
+  const start = useCallback(() => {
+    begin(generateDailySession(deals, store, settings, dayNow));
+  }, [begin, deals, store, settings, dayNow]);
+
+  /** Dodatkowa partia na wylosowanych rozdaniach — po sesji dziennej, na dalszy trening (D14). */
+  const startExtra = useCallback(() => {
+    begin(generateExtraSession(deals, store, settings, dayNow));
+  }, [begin, deals, store, settings, dayNow]);
 
   /** Wyjście z sesji bez jej kasowania — migawka czeka na „Wznów" (D3). */
   const pause = useCallback(() => {
@@ -223,56 +227,63 @@ export function useDailySession(args: Args) {
     setPaused(null);
   }, [paused]);
 
+  /** Porzucenie wstrzymanej migawki bez startu nowej — wyniki zostają, znika sama kolejka (D16). */
+  const discard = useCallback(() => {
+    if (!paused) return;
+    setPaused(null);
+    clearRow();
+  }, [paused, clearRow]);
+
   const dismissCompleted = useCallback(() => setCompleted(null), []);
 
   /**
    * Co zostało na dziś — źródło dla „Rekomendowane na dziś" w panelu bocznym.
    * Poza sesją to podgląd kolejki, którą dostaniesz po „Rozpocznij", więc najwyżej
    * `dailyTarget` pozycji zamiast całej puli zaległości (reszta i tak wraca w kolejne
-   * dni). Gdy sesja trwa albo czeka wstrzymana, bierzemy JEJ kolejkę: świeże
-   * generowanie zwróciłoby inny zestaw niż ten, do którego wracasz (D9) — ale
-   * przefiltrowaną przez aktualny SRS, bo migawka nie wie o ocenach wystawionych
-   * poza sesją (D12).
+   * dni). Gdy sesja albo partia trwa lub czeka wstrzymana, bierzemy JEJ kolejkę:
+   * świeże generowanie zwróciłoby inny zestaw niż ten, do którego wracasz (D9) — ale
+   * bez rozdań ocenionych dziś, bo migawka nie wie o ocenach wystawionych poza nią (D12).
    */
   const todayQueue = useMemo<string[]>(() => {
     const snap = runtime ?? paused;
     if (snap) {
-      // W buforze przebieg główny jest już wyczerpany; poza nim bufor to ogon, który
-      // dopiero przyjdzie — stąd obie części w tej samej liście.
-      const main = snap.inBuffer ? [] : snap.session.slots.slice(snap.index).map(s => s.dealId);
-      const rest = [...main, ...snap.buffer.slice(snap.inBuffer ? snap.bufferIndex : 0)];
       // Migawka zmienia się wyłącznie od odpowiedzi udzielonych W sesji, więc bez
       // tego filtru rozdanie ocenione w swobodnej grze przy pauzie wisiało na liście
-      // do końca dnia. Zostaje to, co wciąż wypada na dziś: rozdanie przestawione na
-      // później — trafione (+3 dni) czy pudło (jutro) — dziś nie ma już czego robić.
-      // Pudło z przebiegu głównego zostaje: tam SRS-u nie ruszamy, więc termin jest
-      // nadal dzisiejszy, a pozycja czeka w ogonie bufora. Cofnięcie oceny RESTARTEM
-      // przywraca poprzedni termin, więc pozycja wraca na listę sama.
-      return rest.filter(id => isReviewDue(normalizeEntry(store[id]), dayNow));
+      // do końca dnia. Ocenione dziś — trafione czy pudło — dziś nie ma już czego
+      // robić (D13). Cofnięcie oceny RESTARTEM przywraca poprzedni wpis, więc pozycja
+      // wraca na listę sama.
+      return snap.session.slots.slice(snap.index)
+        .map(s => s.dealId)
+        .filter(id => !isAnsweredToday(normalizeEntry(store[id]), dayNow));
     }
     return deals.length ? generateDailySession(deals, store, settings, dayNow).slots.map(s => s.dealId) : [];
   }, [runtime, paused, deals, store, settings, dayNow]);
 
-  const currentDealId = useMemo(() => {
-    if (!runtime) return null;
-    return runtime.inBuffer
-      ? runtime.buffer[runtime.bufferIndex] ?? null
-      : runtime.session.slots[runtime.index]?.dealId ?? null;
-  }, [runtime]);
+  /** Ile rozdań wylosuje „Wylosuj partię" — zero, gdy wszystko było dziś rozwiązane. */
+  const extraSize = useMemo(
+    () => extraBatchSize(deals, store, settings, dayNow),
+    [deals, store, settings, dayNow],
+  );
+
+  const currentDealId = useMemo(
+    () => runtime?.session.slots[runtime.index]?.dealId ?? null,
+    [runtime],
+  );
 
   // Rozdanie zniknęło z aktywnej puli (admin je zarchiwizował) — przeskakujemy
   // slot, zamiast zacinać sesję na czymś, czego nie da się wczytać (D7).
   useEffect(() => {
     if (!runtime || !deals.length || !currentDealId) return;
     if (deals.some(d => d.id === currentDealId)) return;
-    commit(advance(runtime, false), runtime.session);
+    commit(advance(runtime), runtime.session);
   }, [runtime, deals, currentDealId, commit]);
 
-  // Zmiana celu dziennego albo trybu przelicza kolejkę (D4). W buforze kolejka
-  // jest zamknięta (D5), więc zmiana zadziała dopiero od następnej sesji.
+  // Zmiana celu dziennego albo trybu przelicza kolejkę sesji dziennej (D4). Partii
+  // nie ruszamy: to stała liczba wylosowanych rozdań, a dopychanie brałoby z pul
+  // sesji dziennej (D15).
   useEffect(() => {
     const snap = runtime ?? paused;
-    if (!snap || snap.inBuffer || !deals.length) return;
+    if (!snap || snap.session.type === 'extra' || !deals.length) return;
 
     const next = adaptSession(snap.session, snap.index, deals, storeRef.current, settings, dayNow);
     if (next === snap.session) return;
@@ -280,13 +291,8 @@ export function useDailySession(args: Args) {
     const updated: Runtime = { ...snap, session: next, token: snap.token + 1 };
     if (updated.index < next.slots.length) {
       if (runtime) setRuntime(updated); else setPaused(updated);
-      return;
-    }
-    // Cel spadł do poziomu tego, co już zrobione — przebieg główny jest wyczerpany.
-    if (updated.buffer.length) {
-      const drained: Runtime = { ...updated, inBuffer: true, bufferIndex: 0 };
-      if (runtime) setRuntime(drained); else setPaused(drained);
     } else if (runtime) {
+      // Cel spadł do poziomu tego, co już zrobione — sesja jest domknięta.
       commit('done', next);
     } else {
       setPaused(null);
@@ -295,47 +301,39 @@ export function useDailySession(args: Args) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runtime, paused, deals.length, settings.dailyTarget, settings.mode, dayNow, commit, clearRow]);
 
-  /** handleUserAnswer — Sections 3 & 4 of the SRS spec. */
+  /**
+   * handleUserAnswer — wynik od razu trafia do SRS-u i historii. Pudło wraca jutro,
+   * a nie w tej samej sesji: bufora poprawek już nie ma (D13).
+   */
   const answer = useCallback((correct: boolean) => {
     if (!runtime) return;
-
-    if (!runtime.inBuffer) {
-      const id = runtime.session.slots[runtime.index]?.dealId;
-      if (!id) return;
-      recordHistory(id, correct, 'main');
-      if (correct) {
-        applyResult(id, true); // success scaling now
-      }
-      // A miss is NOT finalized here — it is deferred to the session buffer.
-      commit(advance(runtime, !correct), runtime.session);
-      return;
-    }
-
-    // Session buffer pass — regardless of result the deal returns tomorrow.
-    const id = runtime.buffer[runtime.bufferIndex];
+    const id = runtime.session.slots[runtime.index]?.dealId;
     if (!id) return;
-    recordHistory(id, correct, 'buffer');
-    finalizeBufferResult(id, correct);
-    commit(advance(runtime, false), runtime.session);
-  }, [runtime, recordHistory, applyResult, finalizeBufferResult, commit]);
+    recordHistory(id, correct, 'main');
+    applyResult(id, correct);
+    commit(advance(runtime), runtime.session);
+  }, [runtime, recordHistory, applyResult, commit]);
 
   return {
     active: runtime !== null,
     loading,
     currentDealId,
-    currentKind: runtime && !runtime.inBuffer ? runtime.session.slots[runtime.index]?.kind ?? null : null,
+    currentKind: runtime?.session.slots[runtime.index]?.kind ?? null,
     progress: runtime ? toProgress(runtime) : null,
     sessionToken: runtime?.token ?? 0,
     completed,
     /** Id rozdań, które zostały na dziś — w kolejności sesji. */
     todayQueue,
+    extraSize,
     /** Wstrzymana migawka na dziś — źródło liczników „Wznów sesję (4/12)". */
     pausedSession: paused?.session ?? null,
     pausedProgress: paused ? toProgress(paused) : null,
     start,
+    startExtra,
     answer,
     pause,
     resume,
+    discard,
     dismissCompleted,
   };
 }

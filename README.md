@@ -11,6 +11,7 @@ Aplikacja SPA do nauki brydża oparta na systemie powtórek rozłożonych w czas
   - Interwały: 3 → 9 → 27 → 81 → 160 dni, potem już stale co 160 — rozdanie nigdy nie odpada z powtórek
   - Błędna odpowiedź: powtórka jutro i licznik od zera; „Opanowane" to tylko etykieta dla interwału 81+ dni
 - **Sekcja "Rekomendowane na dziś"** — automatyczny filtr rozdań do powtórki
+- **Dodatkowa partia** — „🎲 Wylosuj partię" po sesji dziennej: tyle rozdań, ile wynosi cel dzienny, wylosowanych spośród nierozwiązanych dziś
 - **Tabela licytacji** i **box kontraktu** nakładkowe na stole
 
 ## Stack

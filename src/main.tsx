@@ -6,9 +6,9 @@ import App from './App.tsx'
 const root = createRoot(document.getElementById('root')!)
 
 // Dev-only podglądy bez logowania: `?preview=table` (sam stół), `?preview=sidebar`
-// (sam panel boczny) i `?preview=admin` (panel administracyjny). Dynamiczny import —
-// w produkcyjnym buildzie ta gałąź wypada razem z modułami. Nieznana wartość ląduje
-// na stole, jak dotąd.
+// (sam panel boczny), `?preview=admin` (panel administracyjny) i `?preview=session`
+// (sesja dzienna i partia na hookach w pamięci). Dynamiczny import — w produkcyjnym
+// buildzie ta gałąź wypada razem z modułami. Nieznana wartość ląduje na stole, jak dotąd.
 const preview = import.meta.env.DEV
   ? new URLSearchParams(window.location.search).get('preview')
   : null
@@ -21,6 +21,10 @@ if (preview !== null) {
   } else if (preview === 'admin') {
     import('./dev/AdminPreview').then(({ AdminPreview }) => {
       root.render(<StrictMode><AdminPreview /></StrictMode>)
+    })
+  } else if (preview === 'session') {
+    import('./dev/SessionPreview').then(({ SessionPreview }) => {
+      root.render(<StrictMode><SessionPreview /></StrictMode>)
     })
   } else {
     import('./dev/TablePreview').then(({ TablePreview }) => {

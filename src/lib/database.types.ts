@@ -85,9 +85,14 @@ export type DailySessionRow = {
   user_id: string;
   /** Doba lokalna migawki jako "YYYY-MM-DD". */
   date: string;
+  /** Kolejka sesji albo partii — tę drugą zdradzają sloty `kind: 'extra'` (D15). */
   slots: SessionSlot[];
   /** Wskaźnik w `slots` (kolumna `idx`, bo `index` to słowo zastrzeżone w SQL). */
   idx: number;
+  /**
+   * Pozostałość po buforze poprawek (D13). Zapisujemy zawsze puste, a przy wczytaniu
+   * czytamy tylko po to, żeby ukarać pudła, które zostawiła w nim starsza wersja.
+   */
   buffer: string[];
   buffer_index: number;
   in_buffer: boolean;
