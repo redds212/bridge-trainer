@@ -6,6 +6,8 @@ import { UserPanel } from '../components/UserPanel';
 import { useSRS } from '../hooks/useSRS';
 import { useHistory } from '../hooks/useHistory';
 import { useDailySession } from '../hooks/useDailySession';
+import { usePomodoro } from '../hooks/usePomodoro';
+import { startTraining } from '../lib/pomodoro';
 import { addDaysKey } from '../lib/date';
 import mockDeals from '../data/dealsMock.json';
 
@@ -54,6 +56,7 @@ export function SessionPreview() {
 function Harness() {
   const srs = useSRS(null);
   const history = useHistory(null);
+  const pomodoro = usePomodoro(null);
   const [settings, setSettings] = useState<UserSettings>({ dailyTarget: 5, mode: 'balanced', timedMode: false });
   const [view, setView] = useState<'trainer' | 'panel'>('trainer');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -104,6 +107,7 @@ function Harness() {
         onStartExtra={() => { session.startExtra(); setView('trainer'); }}
         onResumeSession={() => { session.resume(); setView('trainer'); }}
         onDiscardSession={session.discard}
+        onStartPomodoro={() => { pomodoro.start(); startTraining(session); setView('trainer'); }}
         onClearHistory={history.clear}
         onResetProgress={async () => { await srs.clearAll(); history.clear(); }}
         onBack={() => setView('trainer')}
@@ -124,6 +128,8 @@ function Harness() {
         recordHistory={history.record}
         session={session}
         timedMode={settings.timedMode}
+        pomodoro={pomodoro}
+        onStartPomodoro={() => { pomodoro.start(); startTraining(session); }}
         dealQuery={query}
         onDealQueryChange={setQuery}
         dealDifficulties={difficulties}

@@ -10,6 +10,7 @@ import { resumeLabel, type SessionProgress } from '../hooks/useDailySession';
 import { useDayKey } from '../hooks/useDayKey';
 import { ChangePasswordCard } from '../auth/ChangePasswordCard';
 import { InstallCard } from './InstallPrompt';
+import { POMODORO_HINT } from '../lib/pomodoro';
 
 interface Props {
   deals: Deal[];
@@ -29,6 +30,8 @@ interface Props {
   onResumeSession: () => void;
   /** Porzuca wstrzymaną partię (D16). */
   onDiscardSession: () => void;
+  /** Pomidor 15/3 (trening, potem przerwa); `undefined` chowa przycisk. */
+  onStartPomodoro?: () => void;
   onClearHistory: () => void;
   onResetProgress: () => void | Promise<void>;
   onBack: () => void;
@@ -39,7 +42,7 @@ const MODES: LearningMode[] = ['maintenance', 'balanced', 'intensive'];
 export function UserPanel({
   deals, store, settings, updateSettings, attempts, stats,
   onReplay, pausedSession, pausedProgress, extraSize, onStartSession, onStartExtra, onResumeSession,
-  onDiscardSession, onClearHistory, onResetProgress, onBack,
+  onDiscardSession, onStartPomodoro, onClearHistory, onResetProgress, onBack,
 }: Props) {
   // Ta sama doba, na której stoi kolejka w panelu bocznym — karta „Dzisiejsza sesja”
   // i plan powtórek muszą przełamać się o północy razem z nią, a nie dopiero po
@@ -199,6 +202,16 @@ export function UserPanel({
                   </button>
                 )}
               </>
+            )}
+            {onStartPomodoro && (
+              <button
+                onClick={onStartPomodoro}
+                title={POMODORO_HINT}
+                aria-label={POMODORO_HINT}
+                className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-100 font-semibold rounded-lg text-sm transition-colors border border-slate-600"
+              >
+                🍅 15 min
+              </button>
             )}
             {stats.solvedToday > 0 && (
               <span className="text-emerald-400/80 text-xs">Dziś rozwiązano: {stats.solvedToday}</span>

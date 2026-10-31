@@ -21,6 +21,9 @@ import { ControlPanel } from './components/ControlPanel';
 import { DecisionPanel } from './components/DecisionPanel';
 import { DealTimer } from './components/DealTimer';
 import { SessionBar, PausedSessionBar } from './components/SessionBar';
+import { usePomodoro, type PomodoroApi } from './hooks/usePomodoro';
+import { canStartPomodoro, canTrain, formatClock, POMODORO_HINT, startTraining } from './lib/pomodoro';
+import { PomodoroBar, PomodoroBreak } from './components/Pomodoro';
 import { InstallBanner } from './components/InstallPrompt';
 import { ReportDealButton } from './components/ReportDeal';
 import { Icon } from './components/Icon';
@@ -55,6 +58,8 @@ function AppShell() {
   const srs = useSRS(userId);
   const history = useHistory(userId);
   const { settings, update: updateSettings } = useSettings(userId);
+  // Pomidor (15 min treningu / 3 min przerwy): stan lokalny per konto, czas od zegara ściennego.
+  const pomodoro = usePomodoro(userId);
 
   const session = useDailySession({
     userId,
@@ -65,6 +70,19 @@ function AppShell() {
     applyResult: srs.applyResult,
     recordHistory: history.record,
   });
+
+  // Czas pomidora w tytule karty — widać go z innej karty i z paska zadań.
+  const pomodoroClock = pomodoro.phase === 'work' || pomodoro.phase === 'break'
+    ? `${pomodoro.phase === 'break' ? '☕' : '🍅'} ${formatClock(pomodoro.remaining)}`
+    : null;
+  useEffect(() => {
+    if (!pomodoroClock) return;
+    const before = document.title;
+    document.title = `${pomodoroClock} · BridgeLoop`;
+    return () => { document.title = before; };
+  }, [pomodoroClock]);
+
+  const startPomodoro = () => { pomodoro.start(); startTraining(session); };
 
   if (loading) return <LoadingScreen />;
   if (!user) return <LoginPage />;
@@ -112,6 +130,9 @@ function AppShell() {
         onStartExtra={() => { session.startExtra(); setView('trainer'); }}
         onResumeSession={() => { session.resume(); setView('trainer'); }}
         onDiscardSession={session.discard}
+        onStartPomodoro={canStartPomodoro(pomodoro.phase) && canTrain(session)
+          ? () => { startPomodoro(); setView('trainer'); }
+          : undefined}
         onClearHistory={history.clear}
         onResetProgress={async () => { await srs.clearAll(); history.clear(); }}
         onBack={() => setView('trainer')}
@@ -128,6 +149,8 @@ function AppShell() {
       recordHistory={history.record}
       session={session}
       timedMode={settings.timedMode}
+      pomodoro={pomodoro}
+      onStartPomodoro={startPomodoro}
       dealQuery={dealQuery}
       onDealQueryChange={setDealQuery}
       dealDifficulties={dealDifficulties}
@@ -152,6 +175,9 @@ interface TrainerProps {
   recordHistory: (id: string, correct: boolean, phase: 'main' | 'buffer' | 'free') => void;
   session: SessionApi;
   timedMode: boolean;
+  pomodoro: PomodoroApi;
+  /** Start pomidora razem z wejściem w trening (także „Kolejny 🍅" po przerwie). */
+  onStartPomodoro: () => void;
   dealQuery: string;
   onDealQueryChange: (query: string) => void;
   dealDifficulties: Difficulty[];
@@ -161,7 +187,7 @@ interface TrainerProps {
 }
 
 // Eksport tylko dla podglądu `?preview=session` (src/dev/SessionPreview.tsx).
-export function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session, timedMode, dealQuery, onDealQueryChange, dealDifficulties, onToggleDifficulty, onAdmin, onPanel }: TrainerProps) {
+export function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session, timedMode, pomodoro, onStartPomodoro, dealQuery, onDealQueryChange, dealDifficulties, onToggleDifficulty, onAdmin, onPanel }: TrainerProps) {
   const { getEntry } = srs;
 
   // Rekomendacje = dzisiejsza kolejka SRS, w jej kolejności. Rozdanie z kolejki może
@@ -217,6 +243,30 @@ export function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, 
     if (d) reset(d);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.sessionToken]);
+
+  // Pomidor: po upływie 15 minut rozdanie w toku dokańczasz, a przerwa zaczyna się, gdy na stole
+  // nie ma już rozpoczętej pracy — po ocenie, po przejściu sesji do następnego rozdania (stoi na
+  // początku), na ekranie powitalnym. Sesja zostaje wstrzymana na czas przerwy.
+  const midDeal = !!selectedDeal && !!state && state.phase !== 'rated'
+    && !(state.phase === 'intro' && state.currentStep === 0 && !state.isAnimating);
+  useEffect(() => {
+    if (pomodoro.phase !== 'wrapup' || midDeal) return;
+    if (session.active) session.pause();
+    pomodoro.beginBreak();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pomodoro.phase, midDeal]);
+
+  // W trakcie pomidora koniec sesji nie kończy treningu: po sesji dziennej idą partie, aż minie
+  // 15 minut. Gdy nie ma już czego losować, zostaje zwykłe podsumowanie.
+  useEffect(() => {
+    if (!session.completed) return;
+    if (pomodoro.phase === 'wrapup') session.dismissCompleted();
+    else if (pomodoro.phase === 'work' && session.extraSize > 0) {
+      session.dismissCompleted();
+      session.startExtra();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.completed, pomodoro.phase]);
 
   // Wyjście do wybranego rozdania nie kasuje sesji — migawka czeka na „Wznów" (D3).
   const handleSelect = (id: string) => {
@@ -326,6 +376,8 @@ export function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, 
 
         <InstallBanner />
 
+        <PomodoroBar pomodoro={pomodoro} />
+
         {session.active && session.progress && (
           <SessionBar progress={session.progress} onPause={session.pause} />
         )}
@@ -333,6 +385,8 @@ export function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, 
         {!session.active && session.pausedProgress && (
           <PausedSessionBar progress={session.pausedProgress} onResume={session.resume} />
         )}
+
+        <PomodoroBreak pomodoro={pomodoro} onNext={onStartPomodoro} />
 
         {session.completed && (
           <SessionComplete
@@ -353,6 +407,7 @@ export function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, 
             onStartExtra={session.startExtra}
             onResumeSession={() => session.resume()}
             onDiscardSession={session.discard}
+            onStartPomodoro={canStartPomodoro(pomodoro.phase) && canTrain(session) ? onStartPomodoro : undefined}
           />
         ) : (
           <>
@@ -451,7 +506,7 @@ function SessionComplete({ session, extraSize, onStartExtra, onClose }: {
 }
 
 function WelcomeScreen({
-  todayDeals, onSelect, pausedProgress, extraSize, onStartSession, onStartExtra, onResumeSession, onDiscardSession,
+  todayDeals, onSelect, pausedProgress, extraSize, onStartSession, onStartExtra, onResumeSession, onDiscardSession, onStartPomodoro,
 }: {
   /** Dzisiejsza kolejka SRS — ta sama, którą pokazuje panel boczny. */
   todayDeals: Deal[];
@@ -464,8 +519,20 @@ function WelcomeScreen({
   onResumeSession: () => void;
   /** Porzuca wstrzymaną partię (D16). */
   onDiscardSession: () => void;
+  /** Pomidor 15/3; `undefined` chowa przycisk (pomidor trwa albo nie ma czego trenować). */
+  onStartPomodoro?: () => void;
 }) {
   const [confirmRestart, setConfirmRestart] = useState(false);
+  const pomodoroButton = onStartPomodoro && (
+    <button
+      onClick={onStartPomodoro}
+      title={POMODORO_HINT}
+      aria-label={POMODORO_HINT}
+      className="px-5 py-2 bg-brand-soft hover:bg-brand-line/60 text-brand-text font-medium rounded-[9px] border border-brand-line text-sm transition-colors"
+    >
+      🍅 15 min
+    </button>
+  );
   // Wstrzymanej partii nie zaczyna się „od nowa" — kończy się ją i wraca do wyboru
   // między sesją dzienną a kolejną partią (D16).
   const pausedExtra = pausedProgress?.type === 'extra';
@@ -525,6 +592,7 @@ function WelcomeScreen({
               {pausedExtra ? 'Zakończ partię' : 'Zacznij od nowa'}
             </button>
           )}
+          {pomodoroButton}
         </div>
       ) : (
         <div className="flex flex-col items-center gap-3">
@@ -534,14 +602,17 @@ function WelcomeScreen({
           >
             ▶ Rozpocznij dzisiejszą sesję
           </button>
-          {extraSize > 0 && (
-            <button
-              onClick={onStartExtra}
-              className="px-5 py-2 bg-brand-soft hover:bg-brand-line/60 text-brand-text font-medium rounded-[9px] border border-brand-line text-sm transition-colors"
-            >
-              🎲 Wylosuj partię ({extraSize})
-            </button>
-          )}
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {extraSize > 0 && (
+              <button
+                onClick={onStartExtra}
+                className="px-5 py-2 bg-brand-soft hover:bg-brand-line/60 text-brand-text font-medium rounded-[9px] border border-brand-line text-sm transition-colors"
+              >
+                🎲 Wylosuj partię ({extraSize})
+              </button>
+            )}
+            {pomodoroButton}
+          </div>
         </div>
       )}
 
