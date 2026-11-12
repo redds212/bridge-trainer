@@ -11,7 +11,7 @@ function Tally({ done }: { done: number }) {
  * prosi o dokończenie bieżącego rozdania (przerwa zaczyna się po ocenie).
  */
 export function PomodoroBar({ pomodoro }: { pomodoro: PomodoroApi }) {
-  const { phase, remaining, done, stop } = pomodoro;
+  const { phase, remaining, done, stop, config } = pomodoro;
   if (phase !== 'work' && phase !== 'wrapup') return null;
   const wrapup = phase === 'wrapup';
 
@@ -27,7 +27,7 @@ export function PomodoroBar({ pomodoro }: { pomodoro: PomodoroApi }) {
         🍅 {wrapup ? 'Czas!' : formatClock(remaining)}
       </span>
       <span className="text-brand-dim truncate min-w-0 flex-1">
-        {wrapup ? 'Dokończ to rozdanie — potem 3 min przerwy' : 'do przerwy'}
+        {wrapup ? `Dokończ to rozdanie — potem ${config.breakMin} min przerwy` : 'do przerwy'}
       </span>
       <Tally done={done} />
       <button
@@ -41,11 +41,11 @@ export function PomodoroBar({ pomodoro }: { pomodoro: PomodoroApi }) {
 }
 
 /**
- * Okno przerwy (3 min) i — po jej upływie — gotowości do kolejnego pomidora. Kliknięcie tła nie
+ * Okno przerwy i — po jej upływie — gotowości do kolejnego pomidora. Kliknięcie tła nie
  * kończy pomidora: wyjście jest jednym z dwóch jawnych przycisków.
  */
 export function PomodoroBreak({ pomodoro, onNext }: { pomodoro: PomodoroApi; onNext: () => void }) {
-  const { phase, remaining, done, stop } = pomodoro;
+  const { phase, remaining, done, stop, config } = pomodoro;
   if (phase !== 'break' && phase !== 'ready') return null;
   const ready = phase === 'ready';
 
@@ -66,7 +66,7 @@ export function PomodoroBreak({ pomodoro, onNext }: { pomodoro: PomodoroApi; onN
       )}
       <p className="text-brand-dim text-sm mb-6">
         {done > 0 ? `Ukończone dziś: ${done} 🍅. ` : ''}
-        {ready ? 'Gotowy na kolejne 15 minut?' : 'Odejdź od ekranu — sesja czeka wstrzymana.'}
+        {ready ? `Gotowy na kolejne ${config.workMin} minut?` : 'Odejdź od ekranu — sesja czeka wstrzymana.'}
       </p>
       <div className="flex flex-wrap items-center justify-center gap-2">
         <button

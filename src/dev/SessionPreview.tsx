@@ -108,6 +108,8 @@ function Harness() {
         onResumeSession={() => { session.resume(); setView('trainer'); }}
         onDiscardSession={session.discard}
         onStartPomodoro={() => { pomodoro.start(); startTraining(session); setView('trainer'); }}
+        pomodoroConfig={pomodoro.config}
+        onPomodoroConfigChange={pomodoro.setConfig}
         onClearHistory={history.clear}
         onResetProgress={async () => { await srs.clearAll(); history.clear(); }}
         onBack={() => setView('trainer')}

@@ -1,5 +1,5 @@
 /**
- * Pomidor: 15 minut treningu, 3 minuty przerwy. Czysta maszyna stanów liczona od czasu ściennego
+ * Pomidor: odcinek treningu (15/20/25 min) i przerwa (1/3/5 min). Czysta maszyna stanów liczona od czasu ściennego
  * (`endsAt`), więc karta w tle, uśpiony telefon ani przeładowanie strony nie wydłużają odcinka.
  *
  *   idle ──start──▶ work ──czas──▶ wrapup ──koniec rozdania──▶ break ──czas──▶ ready
@@ -10,8 +10,31 @@
  * ocenie. Przerwanie w pół rozdania kasowałoby przemyślenie, a wynik i tak nie byłby zapisany.
  * Licznik `done` (ukończone pomidory) liczy się w obrębie lokalnej doby.
  */
-export const WORK_MS = 15 * 60_000;
-export const BREAK_MS = 3 * 60_000;
+export const WORK_OPTIONS = [15, 20, 25] as const;
+export const BREAK_OPTIONS = [1, 3, 5] as const;
+export type WorkMinutes = (typeof WORK_OPTIONS)[number];
+export type BreakMinutes = (typeof BREAK_OPTIONS)[number];
+
+/** Długości odcinków wybrane w panelu użytkownika. Zmiana działa od NASTĘPNEGO odcinka. */
+export interface PomodoroConfig {
+  workMin: WorkMinutes;
+  breakMin: BreakMinutes;
+}
+
+export const DEFAULT_POMODORO_CONFIG: PomodoroConfig = { workMin: 15, breakMin: 3 };
+
+/** Odczyt ustawień: wartość spoza listy wyboru wraca do domyślnej (osobno dla nauki i przerwy). */
+export function parsePomodoroConfig(raw: unknown): PomodoroConfig {
+  const r = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+  const workMin = WORK_OPTIONS.find(v => v === r.workMin) ?? DEFAULT_POMODORO_CONFIG.workMin;
+  const breakMin = BREAK_OPTIONS.find(v => v === r.breakMin) ?? DEFAULT_POMODORO_CONFIG.breakMin;
+  return { workMin, breakMin };
+}
+
+export function pomodoroHint(cfg: PomodoroConfig): string {
+  return `Pomidor: ${cfg.workMin} min treningu (sesja, potem partie), ${cfg.breakMin} min przerwy`;
+}
+
 /** Zapisany stan starszy niż to (licząc od końca odcinka) jest porzucony — nikt już na niego nie czeka. */
 export const STALE_MS = 60 * 60_000;
 
@@ -42,14 +65,14 @@ function todayDone(p: Pomodoro, now: number): number {
 }
 
 /** Start albo kolejny odcinek pracy (także „Pomiń przerwę"). */
-export function startWork(p: Pomodoro, now: number): Pomodoro {
-  return { phase: 'work', endsAt: now + WORK_MS, done: todayDone(p, now), day: dayKey(now) };
+export function startWork(p: Pomodoro, now: number, cfg: PomodoroConfig = DEFAULT_POMODORO_CONFIG): Pomodoro {
+  return { phase: 'work', endsAt: now + cfg.workMin * 60_000, done: todayDone(p, now), day: dayKey(now) };
 }
 
 /** Rozdanie skończone po upływie czasu pracy — liczymy pomidora i zaczynamy przerwę. */
-export function startBreak(p: Pomodoro, now: number): Pomodoro {
+export function startBreak(p: Pomodoro, now: number, cfg: PomodoroConfig = DEFAULT_POMODORO_CONFIG): Pomodoro {
   if (p.phase !== 'wrapup' && p.phase !== 'work') return p;
-  return { phase: 'break', endsAt: now + BREAK_MS, done: todayDone(p, now) + 1, day: dayKey(now) };
+  return { phase: 'break', endsAt: now + cfg.breakMin * 60_000, done: todayDone(p, now) + 1, day: dayKey(now) };
 }
 
 export function stop(p: Pomodoro, now: number): Pomodoro {
@@ -99,8 +122,6 @@ export function parsePomodoro(raw: unknown, now: number): Pomodoro {
 export function canStartPomodoro(phase: PomodoroPhase): boolean {
   return phase === 'idle' || phase === 'ready';
 }
-
-export const POMODORO_HINT = 'Pomidor: 15 min treningu (sesja, potem partie), 3 min przerwy';
 
 /** To, czego pomidor potrzebuje od sesji (podzbiór `useDailySession`). */
 export interface TrainingControls {

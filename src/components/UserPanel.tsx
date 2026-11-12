@@ -10,7 +10,7 @@ import { resumeLabel, type SessionProgress } from '../hooks/useDailySession';
 import { useDayKey } from '../hooks/useDayKey';
 import { ChangePasswordCard } from '../auth/ChangePasswordCard';
 import { InstallCard } from './InstallPrompt';
-import { POMODORO_HINT } from '../lib/pomodoro';
+import { BREAK_OPTIONS, WORK_OPTIONS, pomodoroHint, type PomodoroConfig } from '../lib/pomodoro';
 
 interface Props {
   deals: Deal[];
@@ -30,8 +30,10 @@ interface Props {
   onResumeSession: () => void;
   /** Porzuca wstrzymaną partię (D16). */
   onDiscardSession: () => void;
-  /** Pomidor 15/3 (trening, potem przerwa); `undefined` chowa przycisk. */
+  /** Pomidor (trening, potem przerwa); `undefined` chowa przycisk. */
   onStartPomodoro?: () => void;
+  pomodoroConfig: PomodoroConfig;
+  onPomodoroConfigChange: (patch: Partial<PomodoroConfig>) => void;
   onClearHistory: () => void;
   onResetProgress: () => void | Promise<void>;
   onBack: () => void;
@@ -42,7 +44,7 @@ const MODES: LearningMode[] = ['maintenance', 'balanced', 'intensive'];
 export function UserPanel({
   deals, store, settings, updateSettings, attempts, stats,
   onReplay, pausedSession, pausedProgress, extraSize, onStartSession, onStartExtra, onResumeSession,
-  onDiscardSession, onStartPomodoro, onClearHistory, onResetProgress, onBack,
+  onDiscardSession, onStartPomodoro, pomodoroConfig, onPomodoroConfigChange, onClearHistory, onResetProgress, onBack,
 }: Props) {
   // Ta sama doba, na której stoi kolejka w panelu bocznym — karta „Dzisiejsza sesja”
   // i plan powtórek muszą przełamać się o północy razem z nią, a nie dopiero po
@@ -206,11 +208,11 @@ export function UserPanel({
             {onStartPomodoro && (
               <button
                 onClick={onStartPomodoro}
-                title={POMODORO_HINT}
-                aria-label={POMODORO_HINT}
+                title={pomodoroHint(pomodoroConfig)}
+                aria-label={pomodoroHint(pomodoroConfig)}
                 className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-100 font-semibold rounded-lg text-sm transition-colors border border-slate-600"
               >
-                🍅 15 min
+                🍅 {pomodoroConfig.workMin} min
               </button>
             )}
             {stats.solvedToday > 0 && (
@@ -279,6 +281,28 @@ export function UserPanel({
                   </button>
                 );
               })}
+            </div>
+          </div>
+
+          {/* Pomidor 🍅 — długości odcinków; zmiana działa od następnego odcinka */}
+          <div className="border-t border-slate-700 pt-5">
+            <div className="text-slate-300 text-sm">Pomidor 🍅</div>
+            <p className="text-slate-500 text-xs mt-1 mb-3 leading-relaxed">
+              Trening na czas z przerwą. Zmiana obowiązuje od następnego odcinka.
+            </p>
+            <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-2">
+              <PomodoroChoice
+                label="Nauka"
+                options={WORK_OPTIONS}
+                value={pomodoroConfig.workMin}
+                onChange={workMin => onPomodoroConfigChange({ workMin })}
+              />
+              <PomodoroChoice
+                label="Przerwa"
+                options={BREAK_OPTIONS}
+                value={pomodoroConfig.breakMin}
+                onChange={breakMin => onPomodoroConfigChange({ breakMin })}
+              />
             </div>
           </div>
 
@@ -514,5 +538,39 @@ function SessionStat({ value, label, sub, color }: { value: number; label: strin
       <div className="text-slate-300 text-xs mt-1">{label}</div>
       <div className="text-slate-600 text-[10px]">{sub}</div>
     </div>
+  );
+}
+
+/** Wybór jednej z kilku długości (w minutach) — grupa przycisków radiowych. */
+function PomodoroChoice<T extends number>({ label, options, value, onChange }: {
+  label: string;
+  options: readonly T[];
+  value: T;
+  onChange: (next: T) => void;
+}) {
+  return (
+    <>
+      <span className="text-slate-400 text-xs">{label}</span>
+      <div role="radiogroup" aria-label={`${label} — minuty`} className="flex gap-2">
+        {options.map(v => {
+          const active = v === value;
+          return (
+            <button
+              key={v}
+              role="radio"
+              aria-checked={active}
+              onClick={() => onChange(v)}
+              className={`px-3 py-1.5 rounded-lg border text-xs font-semibold tabular-nums transition-colors ${
+                active
+                  ? 'bg-blue-600/20 border-blue-500 text-white'
+                  : 'bg-slate-900/40 border-slate-700 text-slate-400 hover:border-slate-500'
+              }`}
+            >
+              {v} min
+            </button>
+          );
+        })}
+      </div>
+    </>
   );
 }

@@ -22,7 +22,7 @@ import { DecisionPanel } from './components/DecisionPanel';
 import { DealTimer } from './components/DealTimer';
 import { SessionBar, PausedSessionBar } from './components/SessionBar';
 import { usePomodoro, type PomodoroApi } from './hooks/usePomodoro';
-import { canStartPomodoro, canTrain, formatClock, POMODORO_HINT, startTraining } from './lib/pomodoro';
+import { canStartPomodoro, canTrain, formatClock, pomodoroHint, startTraining, type PomodoroConfig } from './lib/pomodoro';
 import { PomodoroBar, PomodoroBreak } from './components/Pomodoro';
 import { InstallBanner } from './components/InstallPrompt';
 import { ReportDealButton } from './components/ReportDeal';
@@ -58,7 +58,7 @@ function AppShell() {
   const srs = useSRS(userId);
   const history = useHistory(userId);
   const { settings, update: updateSettings } = useSettings(userId);
-  // Pomidor (15 min treningu / 3 min przerwy): stan lokalny per konto, czas od zegara ściennego.
+  // Pomidor (trening / przerwa, długości z panelu użytkownika): stan lokalny per konto, czas od zegara ściennego.
   const pomodoro = usePomodoro(userId);
 
   const session = useDailySession({
@@ -133,6 +133,8 @@ function AppShell() {
         onStartPomodoro={canStartPomodoro(pomodoro.phase) && canTrain(session)
           ? () => { startPomodoro(); setView('trainer'); }
           : undefined}
+        pomodoroConfig={pomodoro.config}
+        onPomodoroConfigChange={pomodoro.setConfig}
         onClearHistory={history.clear}
         onResetProgress={async () => { await srs.clearAll(); history.clear(); }}
         onBack={() => setView('trainer')}
@@ -244,7 +246,7 @@ export function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.sessionToken]);
 
-  // Pomidor: po upływie 15 minut rozdanie w toku dokańczasz, a przerwa zaczyna się, gdy na stole
+  // Pomidor: po upływie czasu treningu rozdanie w toku dokańczasz, a przerwa zaczyna się, gdy na stole
   // nie ma już rozpoczętej pracy — po ocenie, po przejściu sesji do następnego rozdania (stoi na
   // początku), na ekranie powitalnym. Sesja zostaje wstrzymana na czas przerwy.
   const midDeal = !!selectedDeal && !!state && state.phase !== 'rated'
@@ -257,7 +259,7 @@ export function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, 
   }, [pomodoro.phase, midDeal]);
 
   // W trakcie pomidora koniec sesji nie kończy treningu: po sesji dziennej idą partie, aż minie
-  // 15 minut. Gdy nie ma już czego losować, zostaje zwykłe podsumowanie.
+  // czas treningu. Gdy nie ma już czego losować, zostaje zwykłe podsumowanie.
   useEffect(() => {
     if (!session.completed) return;
     if (pomodoro.phase === 'wrapup') session.dismissCompleted();
@@ -408,6 +410,7 @@ export function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, 
             onResumeSession={() => session.resume()}
             onDiscardSession={session.discard}
             onStartPomodoro={canStartPomodoro(pomodoro.phase) && canTrain(session) ? onStartPomodoro : undefined}
+            pomodoroConfig={pomodoro.config}
           />
         ) : (
           <>
@@ -507,6 +510,7 @@ function SessionComplete({ session, extraSize, onStartExtra, onClose }: {
 
 function WelcomeScreen({
   todayDeals, onSelect, pausedProgress, extraSize, onStartSession, onStartExtra, onResumeSession, onDiscardSession, onStartPomodoro,
+  pomodoroConfig,
 }: {
   /** Dzisiejsza kolejka SRS — ta sama, którą pokazuje panel boczny. */
   todayDeals: Deal[];
@@ -521,16 +525,17 @@ function WelcomeScreen({
   onDiscardSession: () => void;
   /** Pomidor 15/3; `undefined` chowa przycisk (pomidor trwa albo nie ma czego trenować). */
   onStartPomodoro?: () => void;
+  pomodoroConfig: PomodoroConfig;
 }) {
   const [confirmRestart, setConfirmRestart] = useState(false);
   const pomodoroButton = onStartPomodoro && (
     <button
       onClick={onStartPomodoro}
-      title={POMODORO_HINT}
-      aria-label={POMODORO_HINT}
+      title={pomodoroHint(pomodoroConfig)}
+      aria-label={pomodoroHint(pomodoroConfig)}
       className="px-5 py-2 bg-brand-soft hover:bg-brand-line/60 text-brand-text font-medium rounded-[9px] border border-brand-line text-sm transition-colors"
     >
-      🍅 15 min
+      🍅 {pomodoroConfig.workMin} min
     </button>
   );
   // Wstrzymanej partii nie zaczyna się „od nowa" — kończy się ją i wraca do wyboru
