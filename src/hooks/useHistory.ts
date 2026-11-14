@@ -76,9 +76,16 @@ export function useHistory(userId: string | null) {
   }, [userId]);
 
   const record = useCallback((dealId: string, correct: boolean, phase: AttemptPhase) => {
-    setAttempts(prev => [...prev, { dealId, correct, phase, ts: new Date().toISOString() }]);
+    // Czas i id nadaje urządzenie: `ts` to chwila odpowiedzi (nie dotarcia do bazy),
+    // a `client_id` sprawia, że ponowiona wysyłka nie dopisze podejścia drugi raz.
+    const ts = new Date().toISOString();
+    setAttempts(prev => [...prev, { dealId, correct, phase, ts }]);
     if (userId) {
-      supabase.from('attempts').insert({ user_id: userId, deal_id: dealId, correct, phase })
+      supabase.from('attempts')
+        .upsert(
+          { user_id: userId, deal_id: dealId, correct, phase, ts, client_id: crypto.randomUUID() },
+          { onConflict: 'user_id,client_id', ignoreDuplicates: true },
+        )
         .then(({ error }) => { if (error) console.error('History save failed:', error.message); });
     }
   }, [userId]);

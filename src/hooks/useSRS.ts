@@ -28,6 +28,9 @@ function entryToRow(userId: string, dealId: string, e: SRSEntry): SrsProgressRow
     next_review_date: e.nextReviewDate,
     last_seen: e.lastSeen,
     flag_difficult: !!e.flagDifficult,
+    // Chwila tego zapisu, nie `lastSeen`: RESTART przywraca stary `lastSeen`, a i tak
+    // jest najnowszą decyzją. Baza odrzuca zapis starszy niż ten, który już ma.
+    rated_at: new Date().toISOString(),
   };
 }
 

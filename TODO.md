@@ -174,6 +174,7 @@ tylko powłokę; rozdania, SRS i historia idą wyłącznie z Supabase, więc bez
 czego trenować. Pełny offline = cache rozdań w IndexedDB + kolejka ocen synchronizowana
 po powrocie sieci. Do przemyślenia przed kodowaniem: co przy konflikcie zapisu z dwóch
 urządzeń i czy sesja dzienna ma się dać rozpocząć offline.
+→ Rozstrzygnięte 2026-11-14, plan w [docs/OFFLINE_PLAN.md](docs/OFFLINE_PLAN.md); kod jeszcze nie ruszony.
 
 ## 5. Przegląd kodu z 2026-07-30 — znalezione błędy i nieścisłości
 

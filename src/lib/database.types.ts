@@ -69,6 +69,11 @@ export type SrsProgressRow = {
   next_review_date: string | null;
   last_seen: string | null;
   flag_difficult: boolean;
+  /**
+   * Chwila zapisu wiersza na urządzeniu — po niej baza rozstrzyga, który zapis
+   * jest nowszy (0012_offline_sync.sql). NULL tylko w wierszach sprzed migracji.
+   */
+  rated_at: string | null;
 };
 
 export type AttemptRow = {
@@ -78,6 +83,8 @@ export type AttemptRow = {
   correct: boolean;
   phase: 'main' | 'buffer' | 'free';
   ts: string;
+  /** Id nadane przez urządzenie; chroni przed podwójnym zapisem przy ponowieniu. NULL sprzed 0012. */
+  client_id: string | null;
 };
 
 /** Migawka przerwanej sesji dziennej — jeden wiersz na konto. Patrz 0010_daily_sessions.sql. */
@@ -156,13 +163,13 @@ export interface Database {
       };
       srs_progress: {
         Row: SrsProgressRow;
-        Insert: Insert<SrsProgressRow, 'status' | 'consecutive_correct' | 'interval' | 'next_review_date' | 'last_seen' | 'flag_difficult'>;
+        Insert: Insert<SrsProgressRow, 'status' | 'consecutive_correct' | 'interval' | 'next_review_date' | 'last_seen' | 'flag_difficult' | 'rated_at'>;
         Update: Partial<SrsProgressRow>;
         Relationships: [];
       };
       attempts: {
         Row: AttemptRow;
-        Insert: Insert<AttemptRow, 'id' | 'ts'>;
+        Insert: Insert<AttemptRow, 'id' | 'ts' | 'client_id'>;
         Update: Partial<AttemptRow>;
         Relationships: [];
       };
