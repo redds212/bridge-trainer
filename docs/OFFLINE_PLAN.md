@@ -1,7 +1,8 @@
 # Tryb offline — uzgodniony plan
 
-Stan: **plan zatwierdzony 2026-11-14. Etap 1 napisany (migracja 0012 + zapis `rated_at`
-i `client_id` w aplikacji), czeka na uruchomienie migracji w Supabase i wdrożenie.**
+Stan: **plan zatwierdzony 2026-11-14. Etap 1 wdrożony (migracja 0012 + zapis `rated_at`
+i `client_id`). Etap 2 napisany i sprawdzony w Chrome z podstawionym Supabase; czeka na
+test na iPhonie (lista kontrolna na końcu pliku).**
 Urządzenie docelowe: iPhone, aplikacja dodana do ekranu początkowego. Przerwy w sieci
 do 24–36 godzin.
 
@@ -132,3 +133,39 @@ na produkcji co najmniej dzień przed etapem 3.
   przepływu w Chrome z odciętą siecią po każdym etapie.
 - Właściciel: lista kontrolna na iPhonie w trybie samolotowym po etapach 2 i 3
   (ok. 10 minut na etap). iPhone'a nie da się sprawdzić z komputera.
+
+## Etap 2 — jak działa kopia lokalna
+
+- Magazyn: IndexedDB `bridgeloop-offline`, słownik klucz → wartość (`src/lib/localCache.ts`).
+  Klucze per konto: `profile`, `deals`, `srs`, `attempts`, `session`.
+- Kopia powstaje przy każdym udanym wczytaniu online i podąża za stanem w pamięci, więc
+  obejmuje też oceny wystawione po wczytaniu.
+- Brak sieci rozpoznajemy po nieudanym zapytaniu (`src/lib/network.ts`). Hooki danych
+  czytają wtedy z kopii i pomijają każdą mutację; interfejs chowa albo wyłącza wszystko,
+  co zapisuje.
+- Tożsamość zalogowanego konta jest pamiętana osobno (`bridgeloop.identity` w
+  localStorage). Po godzinie bez sieci token wygasa, a supabase-js zwraca wtedy
+  `session: null` — bez własnego zapisu aplikacja pokazałaby ekran logowania.
+- Przy wygasłym tokenie supabase-js ponawia odświeżanie przez ok. 30 s. Dlatego po 2,5 s
+  bez odpowiedzi aplikacja startuje z kopii, a wylogowanie offline usuwa sesję z dysku
+  samo, bez `signOut()`.
+- Kopia konta jest kasowana przy wylogowaniu i gdy serwer potwierdzi brak dostępu.
+
+## Lista kontrolna iPhone — etap 2
+
+Warunek: aplikacja dodana do ekranu początkowego i uruchamiana z ikony.
+
+1. Z siecią: otwórz aplikację, poczekaj na ekran główny, oceń jedno rozdanie.
+2. Zamknij aplikację (wyrzuć z listy otwartych). Włącz tryb samolotowy.
+3. Otwórz aplikację. Oczekiwane: żółty pasek „Offline · dane z … · przeglądanie bez
+   oceniania" i informacja, że trening wymaga połączenia. Nie ekran „Brak połączenia".
+4. Otwórz menu: lista rozdań jest pełna, a rozdanie z punktu 1 ma status po ocenie.
+5. Otwórz dowolne rozdanie, przejdź do decyzji, odsłoń rozwiązanie. Oczekiwane:
+   rozwiązanie widać, zamiast przycisków oceny jest napis „Offline — ocena wymaga
+   połączenia".
+6. „Mój panel": statystyki i historia są widoczne, ustawienia wyszarzone, „Usuń postępy"
+   nieaktywne.
+7. Zostaw telefon w trybie samolotowym na ponad godzinę, potem otwórz aplikację.
+   Oczekiwane: po 2–3 sekundach znów tryb offline, nie ekran logowania.
+8. Wyłącz tryb samolotowy i wróć do aplikacji. Oczekiwane: pasek znika sam albo po
+   „Połącz", wracają przyciski sesji i oceny.

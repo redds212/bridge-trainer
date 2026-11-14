@@ -4,6 +4,8 @@ import type { DealRow } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
 import { dealSignature } from '../lib/dealSignature';
+import { isOfflineFailure } from '../lib/network';
+import { cacheGet, cachePut, cacheKeys } from '../lib/localCache';
 
 export interface DealRecord extends Deal {
   isBase: boolean;
@@ -99,17 +101,29 @@ async function syncDealTags(dealId: string, tagIds: string[] | undefined): Promi
 }
 
 export function useDeals() {
-  const { user } = useAuth();
+  const { user, offline } = useAuth();
+  const userId = user?.id ?? null;
   const [records, setRecords] = useState<DealRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
+    // Bez sieci (albo gdy zapytanie nie doleci) rozdania idą z kopii zapisanej przy
+    // ostatnim udanym wczytaniu — tylko do odczytu, patrz docs/OFFLINE_PLAN.md, O1.
+    const fromCache = async () => {
+      const cached = userId ? await cacheGet<DealRecord[]>(cacheKeys.deals(userId)) : null;
+      setError(cached ? null : 'Brak połączenia i brak zapisanej kopii rozdań.');
+      setRecords(cached ?? []);
+      setLoading(false);
+    };
+    if (offline) { await fromCache(); return; }
+
     const [dealsRes, linksRes] = await Promise.all([
       supabase.from('deals').select('*').order('is_base', { ascending: false }).order('created_at', { ascending: true }),
       supabase.from('deal_tags').select('deal_id, tag_id'),
     ]);
+    if (isOfflineFailure(dealsRes.error) || isOfflineFailure(linksRes.error)) { await fromCache(); return; }
     if (dealsRes.error) {
       setError(dealsRes.error.message);
       setRecords([]);
@@ -121,13 +135,19 @@ export function useDeals() {
         arr.push(link.tag_id);
         tagsByDeal.set(link.deal_id, arr);
       }
-      setRecords((dealsRes.data ?? []).map(r => rowToRecord(r, tagsByDeal.get(r.id) ?? [])));
+      const fresh = (dealsRes.data ?? []).map(r => rowToRecord(r, tagsByDeal.get(r.id) ?? []));
+      setRecords(fresh);
+      // Kopia tylko dla konta z dostępem i tylko z kompletem motywów — inaczej
+      // nadpisalibyśmy dobrą kopię listą bez tagów albo pustą (RLS chowa rozdania
+      // przed kontem niezatwierdzonym).
+      if (userId && user?.status === 'approved' && !linksRes.error) void cachePut(cacheKeys.deals(userId), fresh);
     }
     setLoading(false);
-  }, []);
+  }, [userId, user?.status, offline]);
 
-  // Refetch whenever auth identity / approval status changes (RLS gates the rows).
-  useEffect(() => { reload(); }, [user?.id, user?.status, reload]);
+  // Refetch whenever auth identity / approval status changes (RLS gates the rows),
+  // and when the network comes back or goes away.
+  useEffect(() => { reload(); }, [reload]);
 
   const addDeal = useCallback(async (deal: Deal): Promise<OpResult> => {
     const id = `deal-${crypto.randomUUID()}`;

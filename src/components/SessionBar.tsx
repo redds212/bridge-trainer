@@ -10,7 +10,11 @@ interface Props {
  * `SessionBar`. Bez niego powrót do sesji byłby widoczny tylko na ekranie
  * powitalnym (a ten się nie pokazuje, dopóki jakieś rozdanie jest wybrane).
  */
-export function PausedSessionBar({ progress, onResume }: { progress: SessionProgress; onResume: () => void }) {
+export function PausedSessionBar({ progress, onResume }: {
+  progress: SessionProgress;
+  /** Brak = bez przycisku „Wznów" (tryb offline: sesji nie da się kontynuować). */
+  onResume?: () => void;
+}) {
   const { type, done, total } = progress;
   const pct = total ? Math.round((done / total) * 100) : 0;
 
@@ -28,12 +32,14 @@ export function PausedSessionBar({ progress, onResume }: { progress: SessionProg
         {done} / {total}
       </span>
 
-      <button
-        onClick={onResume}
-        className="text-xs px-2.5 py-1 bg-brand-accent hover:bg-brand-accent-soft text-brand-btn-text font-semibold rounded-[7px] transition-colors flex-shrink-0"
-      >
-        Wznów
-      </button>
+      {onResume && (
+        <button
+          onClick={onResume}
+          className="text-xs px-2.5 py-1 bg-brand-accent hover:bg-brand-accent-soft text-brand-btn-text font-semibold rounded-[7px] transition-colors flex-shrink-0"
+        >
+          Wznów
+        </button>
+      )}
     </div>
   );
 }

@@ -9,6 +9,8 @@ import {
 } from '../lib/session';
 import { normalizeEntry, isAnsweredToday } from '../lib/srs';
 import { useDayKey } from './useDayKey';
+import { isOfflineFailure } from '../lib/network';
+import { cacheGet, cachePut, cacheKeys } from '../lib/localCache';
 
 interface Runtime {
   session: DailySession;
@@ -25,6 +27,11 @@ interface Args {
   settings: UserSettings;
   applyResult: (id: string, correct: boolean) => void;
   recordHistory: (id: string, correct: boolean, phase: AttemptPhase) => void;
+  /**
+   * Brak sieci: migawka idzie z kopii lokalnej, a sesji nie da się zacząć, wznowić
+   * ani porzucić (etap 2 trybu offline — trening bez sieci dojdzie w etapie 3).
+   */
+  offline?: boolean;
 }
 
 export interface SessionProgress {
@@ -93,7 +100,7 @@ function advance(rt: Runtime): Runtime | 'done' {
  * wczytana z bazy ląduje jako `paused`, a nie jako aktywny przebieg.
  */
 export function useDailySession(args: Args) {
-  const { userId, deals, store, storeLoading, settings, applyResult, recordHistory } = args;
+  const { userId, deals, store, storeLoading, settings, applyResult, recordHistory, offline = false } = args;
   const [runtime, setRuntime] = useState<Runtime | null>(null);
   const [paused, setPaused] = useState<Runtime | null>(null);
   const [completed, setCompleted] = useState<DailySession | null>(null);
@@ -115,10 +122,13 @@ export function useDailySession(args: Args) {
 
   const clearRow = useCallback(() => {
     syncedRef.current = null;
-    if (!userId) return;
+    // Offline nic nie kasujemy — ani w bazie, ani w kopii: kopia ma odpowiadać temu,
+    // co leży na serwerze, a o wczorajszej migawce i tak rozstrzyga data przy wczytaniu.
+    if (!userId || offline) return;
+    void cachePut(cacheKeys.session(userId), null);
     supabase.from('daily_sessions').delete().eq('user_id', userId)
       .then(({ error }) => { if (error) console.error('Session clear failed:', error.message); });
-  }, [userId]);
+  }, [userId, offline]);
 
   // Hydratacja przy logowaniu. Migawka z innego dnia jest ignorowana (D2) —
   // zostanie nadpisana przy pierwszym starcie, więc nie ma czego sprzątać.
@@ -126,10 +136,8 @@ export function useDailySession(args: Args) {
     if (!userId) { setRuntime(null); setPaused(null); setLegacyRow(null); setLoading(false); return; }
     let active = true;
     setLoading(true);
-    supabase.from('daily_sessions').select('*').eq('user_id', userId).maybeSingle()
-      .then(({ data, error }) => {
+    const hydrate = (data: DailySessionRow | null) => {
         if (!active) return;
-        if (error) console.error('Session load failed:', error.message);
         const row = data && toDateKey(data.date) === todayKey() ? data : null;
         const snap = row?.slots?.length ? rowToRuntime(row) : null;
         // Wiersz ze starszej wersji zapisany w buforze ma wyczerpany przebieg główny —
@@ -140,9 +148,21 @@ export function useDailySession(args: Args) {
         setPaused(fresh);
         setRuntime(null);
         setLoading(false);
+    };
+    const fromCache = async () => hydrate(await cacheGet<DailySessionRow>(cacheKeys.session(userId)));
+    if (offline) { void fromCache(); return () => { active = false; }; }
+
+    supabase.from('daily_sessions').select('*').eq('user_id', userId).maybeSingle()
+      .then(({ data, error }) => {
+        if (isOfflineFailure(error)) { void fromCache(); return; }
+        if (error) console.error('Session load failed:', error.message);
+        // Bufor ze starszej wersji (D13) rozliczamy tylko z wiersza z bazy — w kopii
+        // go nie trzymamy, żeby odczyt offline nie wymierzał kar po raz drugi.
+        else void cachePut(cacheKeys.session(userId), data ? { ...data, buffer: [] } : null);
+        hydrate(data);
       });
     return () => { active = false; };
-  }, [userId]);
+  }, [userId, offline]);
 
   // Pudła, które starsza wersja odłożyła do bufora, dostają karę, jakiej bufor nie
   // zdążył wymierzyć (D13) — tak jakby padły już po zmianie. Czekamy na SRS, bo
@@ -175,13 +195,15 @@ export function useDailySession(args: Args) {
   // Zapis write-through: każdy nowy stan sesji ląduje w bazie, tak samo jak
   // wyniki w `useSRS`. Dzięki temu awaryjne zamknięcie karty nic nie kosztuje.
   useEffect(() => {
-    if (!userId || loading) return;
+    if (!userId || loading || offline) return;
     const snap = runtime ?? paused;
     if (!snap || snap === syncedRef.current) return;
     syncedRef.current = snap;
-    supabase.from('daily_sessions').upsert(runtimeToRow(userId, snap), { onConflict: 'user_id' })
+    const row = runtimeToRow(userId, snap);
+    void cachePut(cacheKeys.session(userId), row);
+    supabase.from('daily_sessions').upsert(row, { onConflict: 'user_id' })
       .then(({ error }) => { if (error) console.error('Session save failed:', error.message); });
-  }, [runtime, paused, userId, loading]);
+  }, [runtime, paused, userId, loading, offline]);
 
   const commit = useCallback((next: Runtime | 'done', finished: DailySession) => {
     if (next !== 'done') { setRuntime(next); return; }
@@ -193,6 +215,7 @@ export function useDailySession(args: Args) {
 
   /** Start gotowej kolejki — sesji dziennej albo partii. Zastępuje wstrzymaną migawkę. */
   const begin = useCallback((session: DailySession) => {
+    if (offline) return;
     setCompleted(null);
     setPaused(null);
     if (!session.slots.length) {
@@ -202,7 +225,7 @@ export function useDailySession(args: Args) {
       return;
     }
     setRuntime({ session, index: 0, token: 1 });
-  }, [clearRow]);
+  }, [clearRow, offline]);
 
   const start = useCallback(() => {
     begin(generateDailySession(deals, store, settings, dayNow));
@@ -221,18 +244,18 @@ export function useDailySession(args: Args) {
   }, [runtime]);
 
   const resume = useCallback(() => {
-    if (!paused) return;
+    if (!paused || offline) return;
     setCompleted(null);
     setRuntime({ ...paused, token: paused.token + 1 });
     setPaused(null);
-  }, [paused]);
+  }, [paused, offline]);
 
   /** Porzucenie wstrzymanej migawki bez startu nowej — wyniki zostają, znika sama kolejka (D16). */
   const discard = useCallback(() => {
-    if (!paused) return;
+    if (!paused || offline) return;
     setPaused(null);
     clearRow();
-  }, [paused, clearRow]);
+  }, [paused, clearRow, offline]);
 
   const dismissCompleted = useCallback(() => setCompleted(null), []);
 

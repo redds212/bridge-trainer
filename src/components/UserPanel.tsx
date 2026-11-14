@@ -1,4 +1,4 @@
-import { useMemo, useState, Fragment } from 'react';
+import { useMemo, useState, Fragment, type ReactNode } from 'react';
 import type { Deal, SRSStore, SRSEntry, UserSettings, Attempt, LearningMode } from '../types';
 import { normalizeEntry } from '../lib/srs';
 import { generateDailySession, modeSplit, MODE_LABELS, MODE_PROPORTIONS, type DailySession } from '../lib/session';
@@ -36,6 +36,10 @@ interface Props {
   onPomodoroConfigChange: (patch: Partial<PomodoroConfig>) => void;
   onClearHistory: () => void;
   onResetProgress: () => void | Promise<void>;
+  /** Tryb offline: wszystko, co zapisuje, jest wyłączone (docs/OFFLINE_PLAN.md, O1 i O5). */
+  readOnly?: boolean;
+  /** Pasek stanu pod nagłówkiem — dziś tylko „Offline · dane z …". */
+  banner?: ReactNode;
   onBack: () => void;
 }
 
@@ -44,7 +48,7 @@ const MODES: LearningMode[] = ['maintenance', 'balanced', 'intensive'];
 export function UserPanel({
   deals, store, settings, updateSettings, attempts, stats,
   onReplay, pausedSession, pausedProgress, extraSize, onStartSession, onStartExtra, onResumeSession,
-  onDiscardSession, onStartPomodoro, pomodoroConfig, onPomodoroConfigChange, onClearHistory, onResetProgress, onBack,
+  onDiscardSession, onStartPomodoro, pomodoroConfig, onPomodoroConfigChange, onClearHistory, onResetProgress, readOnly = false, banner, onBack,
 }: Props) {
   // Ta sama doba, na której stoi kolejka w panelu bocznym — karta „Dzisiejsza sesja”
   // i plan powtórek muszą przełamać się o północy razem z nią, a nie dopiero po
@@ -123,6 +127,8 @@ export function UserPanel({
         <span className="text-slate-500 text-xs">Postępy i ustawienia nauki</span>
       </div>
 
+      {banner}
+
       <div className="flex-1 overflow-y-auto p-6 max-w-4xl mx-auto w-full space-y-6">
 
         {/* Stats row */}
@@ -150,7 +156,9 @@ export function UserPanel({
             </div>
           )}
           <div className="flex items-center gap-3 flex-wrap">
-            {pausedProgress ? (
+            {readOnly ? (
+              <span className="text-amber-200/90 text-xs">Offline — trening wymaga połączenia.</span>
+            ) : pausedProgress ? (
               <>
                 <button
                   onClick={onResumeSession}
@@ -221,11 +229,14 @@ export function UserPanel({
           </div>
         </section>
 
-        <ChangePasswordCard />
+        {!readOnly && <ChangePasswordCard />}
 
         {/* Settings: daily target + mode */}
         <section className="bg-slate-800 rounded-xl border border-slate-700 p-5 space-y-5">
-          <h2 className="text-slate-200 font-semibold text-sm">Ustawienia nauki</h2>
+          <h2 className="text-slate-200 font-semibold text-sm">
+            Ustawienia nauki
+            {readOnly && <span className="text-amber-200/90 font-normal text-xs ml-2">zmiana wymaga połączenia</span>}
+          </h2>
 
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -238,7 +249,8 @@ export function UserPanel({
               max={DAILY_TARGET_MAX}
               value={settings.dailyTarget}
               onChange={e => updateSettings({ dailyTarget: Number(e.target.value) })}
-              className="w-full accent-blue-500 cursor-pointer"
+              disabled={readOnly}
+              className="w-full accent-blue-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             />
             <div className="flex justify-between text-slate-600 text-[10px] mt-1">
               <span>{DAILY_TARGET_MIN}</span>
@@ -268,7 +280,8 @@ export function UserPanel({
                   <button
                     key={m}
                     onClick={() => updateSettings({ mode: m })}
-                    className={`px-3 py-2.5 rounded-lg border text-left transition-colors ${
+                    disabled={readOnly}
+                    className={`px-3 py-2.5 rounded-lg border text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                       active
                         ? 'bg-blue-600/20 border-blue-500 text-white'
                         : 'bg-slate-900/40 border-slate-700 text-slate-400 hover:border-slate-500'
@@ -296,12 +309,14 @@ export function UserPanel({
                 options={WORK_OPTIONS}
                 value={pomodoroConfig.workMin}
                 onChange={workMin => onPomodoroConfigChange({ workMin })}
+                disabled={readOnly}
               />
               <PomodoroChoice
                 label="Przerwa"
                 options={BREAK_OPTIONS}
                 value={pomodoroConfig.breakMin}
                 onChange={breakMin => onPomodoroConfigChange({ breakMin })}
+                disabled={readOnly}
               />
             </div>
           </div>
@@ -321,7 +336,8 @@ export function UserPanel({
                 role="switch"
                 aria-checked={settings.timedMode}
                 onClick={() => updateSettings({ timedMode: !settings.timedMode })}
-                className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors ${
+                disabled={readOnly}
+                className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                   settings.timedMode ? 'bg-blue-600' : 'bg-slate-600'
                 }`}
               >
@@ -434,7 +450,7 @@ export function UserPanel({
               Historia rozwiązań
               <span className="text-slate-500 font-normal ml-2">({attempts.length})</span>
             </h2>
-            {attempts.length > 0 && (
+            {attempts.length > 0 && !readOnly && (
               <button
                 onClick={onClearHistory}
                 className="text-xs text-slate-500 hover:text-red-400 transition-colors"
@@ -482,9 +498,11 @@ export function UserPanel({
           </p>
           <button
             onClick={() => setShowResetConfirm(true)}
-            className="px-5 py-2.5 bg-red-900/40 hover:bg-red-900/70 text-red-300 font-medium rounded-lg text-sm transition-colors border border-red-800/50"
+            disabled={readOnly}
+            title={readOnly ? 'Wymaga połączenia' : undefined}
+            className="px-5 py-2.5 bg-red-900/40 hover:bg-red-900/70 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-red-900/40 text-red-300 font-medium rounded-lg text-sm transition-colors border border-red-800/50"
           >
-            Usuń postępy
+            {readOnly ? 'Usuń postępy — wymaga połączenia' : 'Usuń postępy'}
           </button>
         </section>
       </div>
@@ -542,11 +560,12 @@ function SessionStat({ value, label, sub, color }: { value: number; label: strin
 }
 
 /** Wybór jednej z kilku długości (w minutach) — grupa przycisków radiowych. */
-function PomodoroChoice<T extends number>({ label, options, value, onChange }: {
+function PomodoroChoice<T extends number>({ label, options, value, onChange, disabled }: {
   label: string;
   options: readonly T[];
   value: T;
   onChange: (next: T) => void;
+  disabled?: boolean;
 }) {
   return (
     <>
@@ -560,7 +579,8 @@ function PomodoroChoice<T extends number>({ label, options, value, onChange }: {
               role="radio"
               aria-checked={active}
               onClick={() => onChange(v)}
-              className={`px-3 py-1.5 rounded-lg border text-xs font-semibold tabular-nums transition-colors ${
+              disabled={disabled}
+              className={`px-3 py-1.5 rounded-lg border text-xs font-semibold tabular-nums transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                 active
                   ? 'bg-blue-600/20 border-blue-500 text-white'
                   : 'bg-slate-900/40 border-slate-700 text-slate-400 hover:border-slate-500'

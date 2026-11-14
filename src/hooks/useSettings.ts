@@ -3,6 +3,7 @@ import type { UserSettings, LearningMode } from '../types';
 import { supabase } from '../lib/supabase';
 import { DEFAULT_DAILY_TARGET } from '../lib/session';
 import { useAuth } from '../auth/AuthContext';
+import { cacheGet, cachePut, cacheKeys } from '../lib/localCache';
 
 export const DAILY_TARGET_MIN = 5;
 export const DAILY_TARGET_MAX = 40;
@@ -17,7 +18,7 @@ function clampTarget(n: number): number {
  * optimistically and persist (debounced) via the update_my_settings RPC.
  */
 export function useSettings(userId: string | null) {
-  const { user } = useAuth();
+  const { user, offline } = useAuth();
   const [settings, setSettings] = useState<UserSettings>({
     dailyTarget: clampTarget(user?.dailyTarget ?? DEFAULT_DAILY_TARGET),
     mode: user?.mode ?? 'balanced',
@@ -37,6 +38,8 @@ export function useSettings(userId: string | null) {
   }, [user?.id]);
 
   const update = useCallback((patch: Partial<UserSettings>) => {
+    // Ustawienia są offline tylko do odczytu (docs/OFFLINE_PLAN.md, O1).
+    if (offline) return;
     const next: UserSettings = {
       dailyTarget: patch.dailyTarget !== undefined ? clampTarget(patch.dailyTarget) : settingsRef.current.dailyTarget,
       mode: (patch.mode ?? settingsRef.current.mode) as LearningMode,
@@ -53,9 +56,15 @@ export function useSettings(userId: string | null) {
         p_mode: next.mode,
         p_timed_mode: next.timedMode,
       })
-        .then(({ error }) => { if (error) console.error('Settings save failed:', error.message); });
+        .then(async ({ error }) => {
+          if (error) { console.error('Settings save failed:', error.message); return; }
+          // Kopia profilu ma nieść bieżące ustawienia — z niej offline liczy kolejkę na dziś.
+          const key = cacheKeys.profile(userId);
+          const cached = await cacheGet<{ user: Record<string, unknown>; savedAt: string }>(key);
+          if (cached?.user) await cachePut(key, { ...cached, user: { ...cached.user, ...next } });
+        });
     }, 500);
-  }, [userId]);
+  }, [userId, offline]);
 
   return { settings, update };
 }
