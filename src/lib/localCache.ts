@@ -64,6 +64,8 @@ export const cacheKeys = {
   srs: (userId: string) => `srs:${userId}`,
   attempts: (userId: string) => `attempts:${userId}`,
   session: (userId: string) => `session:${userId}`,
+  /** Kolejka niewysłanych zapisów — patrz `outbox.ts`. */
+  outbox: (userId: string) => `outbox:${userId}`,
 };
 
 /** Kasuje całą kopię konta — przy wylogowaniu i po cofnięciu dostępu (O4, O7). */

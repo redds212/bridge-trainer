@@ -11,8 +11,6 @@ interface Props {
   onWrong: () => void;
   /** Czas w trybie na czas dobiegł zera — wynik jest przesądzony, nie ma samooceny. */
   timedOut?: boolean;
-  /** Tryb offline: rozwiązanie da się odsłonić, ale oceny nie ma jak zapisać. */
-  readOnly?: boolean;
 }
 
 function Chevron({ up }: { up: boolean }) {
@@ -25,7 +23,7 @@ function Chevron({ up }: { up: boolean }) {
 const SHORT_VIEWPORT = '(max-height: 500px)';
 const startsExpanded = () => !window.matchMedia(SHORT_VIEWPORT).matches;
 
-export function DecisionPanel({ phase, prompt, solutionText, onReveal, onCorrect, onWrong, timedOut, readOnly }: Props) {
+export function DecisionPanel({ phase, prompt, solutionText, onReveal, onCorrect, onWrong, timedOut }: Props) {
   // Na telefonie tekst i diagram konkurują o ten sam ekran: rozwinięty opis zostawia
   // filcowi ~225 px, przez co figury schodzą do ~8 px. Dlatego panel da się zwinąć do
   // paska — czytasz treść, zwijasz, analizujesz rozdanie w pełnej skali. Na desktopie
@@ -73,11 +71,7 @@ export function DecisionPanel({ phase, prompt, solutionText, onReveal, onCorrect
       </div>
 
       <div className="flex-shrink-0 px-4 pb-3 pt-2 md:px-6 md:pb-5">
-        {revealed && readOnly ? (
-          <div className="py-2 text-center text-xs text-amber-200/90">
-            Offline — ocena wymaga połączenia, więc to rozdanie nie zostanie zaliczone.
-          </div>
-        ) : revealed && timedOut ? (
+        {revealed && timedOut ? (
           // Po zerze nie ma „jak Ci poszło" — wynik jest już przesądzony. Zostaje
           // przeczytanie rozwiązania i przejście dalej; klik zapisuje błąd.
           <>

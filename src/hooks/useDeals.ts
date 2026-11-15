@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Deal, Difficulty } from '../types';
 import type { DealRow } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
@@ -107,14 +107,24 @@ export function useDeals() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const reload = useCallback(async () => {
-    setLoading(true);
+  // Konto, którego rozdania są już w pamięci — patrz ciche odświeżenie niżej.
+  const loadedForRef = useRef<string | null>(null);
+
+  /**
+   * `silent`: to samo konto, zmienił się tylko stan sieci. Bez ekranu ładowania i bez
+   * gubienia listy przy niepowodzeniu — powrót sieci nie może zerwać rozdania w toku.
+   */
+  const reload = useCallback(async (silent = false) => {
+    if (silent && offline) return; // lista w pamięci jest tą samą, którą trzyma kopia
+    if (!silent) setLoading(true);
     // Bez sieci (albo gdy zapytanie nie doleci) rozdania idą z kopii zapisanej przy
     // ostatnim udanym wczytaniu — tylko do odczytu, patrz docs/OFFLINE_PLAN.md, O1.
     const fromCache = async () => {
+      if (silent) return;
       const cached = userId ? await cacheGet<DealRecord[]>(cacheKeys.deals(userId)) : null;
       setError(cached ? null : 'Brak połączenia i brak zapisanej kopii rozdań.');
       setRecords(cached ?? []);
+      if (cached) loadedForRef.current = userId;
       setLoading(false);
     };
     if (offline) { await fromCache(); return; }
@@ -125,9 +135,11 @@ export function useDeals() {
     ]);
     if (isOfflineFailure(dealsRes.error) || isOfflineFailure(linksRes.error)) { await fromCache(); return; }
     if (dealsRes.error) {
+      if (silent) return;
       setError(dealsRes.error.message);
       setRecords([]);
     } else {
+      loadedForRef.current = userId;
       setError(null);
       const tagsByDeal = new Map<string, string[]>();
       for (const link of linksRes.data ?? []) {
@@ -147,7 +159,7 @@ export function useDeals() {
 
   // Refetch whenever auth identity / approval status changes (RLS gates the rows),
   // and when the network comes back or goes away.
-  useEffect(() => { reload(); }, [reload]);
+  useEffect(() => { void reload(userId !== null && loadedForRef.current === userId); }, [reload, userId]);
 
   const addDeal = useCallback(async (deal: Deal): Promise<OpResult> => {
     const id = `deal-${crypto.randomUUID()}`;
@@ -274,7 +286,7 @@ export function useDeals() {
     allDeals: records,
     loading,
     error,
-    reload,
+    reload: () => reload(),
     addDeal,
     addDeals,
     backfillSignatures,

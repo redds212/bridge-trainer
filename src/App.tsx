@@ -11,6 +11,7 @@ import { useGameState } from './hooks/useGameState';
 import { useDealTimer, timeLimitForLevel } from './hooks/useDealTimer';
 import { useHistory } from './hooks/useHistory';
 import { useSettings } from './hooks/useSettings';
+import { useOutbox } from './hooks/useOutbox';
 import { useDailySession, resumeLabel, type SessionProgress } from './hooks/useDailySession';
 import { filterDeals } from './lib/dealSearch';
 import type { DailySession } from './lib/session';
@@ -62,6 +63,7 @@ function AppShell() {
   const dataUserId = user?.status === 'approved' ? user.id : null;
   const srs = useSRS(dataUserId, offline);
   const history = useHistory(dataUserId, offline);
+  const outbox = useOutbox(dataUserId, offline);
   const { settings, update: updateSettings } = useSettings(userId);
   // Pomidor (trening / przerwa, długości z panelu użytkownika): stan lokalny per konto, czas od zegara ściennego.
   const pomodoro = usePomodoro(userId);
@@ -88,7 +90,7 @@ function AppShell() {
     return () => { document.title = before; };
   }, [pomodoroClock]);
 
-  const startPomodoro = () => { if (offline) return; pomodoro.start(); startTraining(session); };
+  const startPomodoro = () => { pomodoro.start(); startTraining(session); };
 
   if (loading) return <LoadingScreen />;
   if (!user) return <LoginPage />;
@@ -97,7 +99,7 @@ function AppShell() {
   if (recovery) return <ResetPasswordPage />;
   // Przed sprawdzeniem statusu: offline bez kopii profilu nie zna prawdziwego `status`
   // (dostaje zastępczy `pending`), więc bez tego brak sieci udawałby konto czekające na
-  // akceptację. Z kopią profilu status jest `approved` i idziemy dalej — do przeglądania.
+  // akceptację. Z kopią profilu status jest `approved` i idziemy dalej — do treningu z kopii.
   if (offline && user.status !== 'approved') return <OfflineScreen onRetry={refreshProfile} />;
   if (user.status !== 'approved') return <PendingScreen username={user.username} />;
   if (srs.loading || history.loading || dealsHook.loading || session.loading) return <LoadingScreen />;
@@ -105,7 +107,18 @@ function AppShell() {
   // przerwane pierwsze wczytanie) — nie ma czego pokazać.
   if (offline && dealsHook.deals.length === 0) return <OfflineScreen onRetry={refreshProfile} />;
 
-  const offlineBar = offline ? <OfflineBar since={offlineSince} onRetry={refreshProfile} /> : null;
+  // Pasek stanu (O6): tryb offline albo zapisy, których nie udało się jeszcze wysłać.
+  const offlineBar = offline || outbox.status !== 'idle'
+    ? (
+      <OfflineBar
+        offline={offline}
+        since={offlineSince}
+        pending={outbox.pending}
+        status={outbox.status}
+        onRetry={offline ? refreshProfile : outbox.flush}
+      />
+    )
+    : null;
 
   // Panel admina offline nie istnieje: każda jego akcja to zapis do bazy (O1).
   if (view === 'admin' && user.isAdmin && !offline) {
@@ -143,7 +156,7 @@ function AppShell() {
         onStartExtra={() => { session.startExtra(); setView('trainer'); }}
         onResumeSession={() => { session.resume(); setView('trainer'); }}
         onDiscardSession={session.discard}
-        onStartPomodoro={!offline && canStartPomodoro(pomodoro.phase) && canTrain(session)
+        onStartPomodoro={canStartPomodoro(pomodoro.phase) && canTrain(session)
           ? () => { startPomodoro(); setView('trainer'); }
           : undefined}
         pomodoroConfig={pomodoro.config}
@@ -173,7 +186,7 @@ function AppShell() {
       dealDifficulties={dealDifficulties}
       onToggleDifficulty={toggleDifficulty}
       onAdmin={user.isAdmin && !offline ? () => setView('admin') : undefined}
-      readOnly={offline}
+      offline={offline}
       banner={offlineBar}
       // Panel pauzuje sesję jak każde inne wyjście (D3). Inaczej karta „Dzisiejsza
       // sesja" nie wiedziała o sesji w toku i jej przyciski startu podmieniały ją
@@ -203,14 +216,14 @@ interface TrainerProps {
   onToggleDifficulty: (difficulty: Difficulty) => void;
   onAdmin?: () => void;
   onPanel: () => void;
-  /** Tryb offline: przeglądanie bez oceniania, sesji i zgłoszeń (docs/OFFLINE_PLAN.md, etap 2). */
-  readOnly?: boolean;
-  /** Pasek stanu nad stołem — dziś tylko „Offline · dane z …". */
+  /** Tryb offline: trening działa z kopii, nie ma tylko zgłoszeń błędów (docs/OFFLINE_PLAN.md, O1). */
+  offline?: boolean;
+  /** Pasek stanu nad stołem — tryb offline i niewysłane zapisy. */
   banner?: ReactNode;
 }
 
 // Eksport tylko dla podglądu `?preview=session` (src/dev/SessionPreview.tsx).
-export function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session, timedMode, pomodoro, onStartPomodoro, dealQuery, onDealQueryChange, dealDifficulties, onToggleDifficulty, onAdmin, onPanel, readOnly = false, banner }: TrainerProps) {
+export function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, session, timedMode, pomodoro, onStartPomodoro, dealQuery, onDealQueryChange, dealDifficulties, onToggleDifficulty, onAdmin, onPanel, offline = false, banner }: TrainerProps) {
   const { getEntry } = srs;
 
   // Rekomendacje = dzisiejsza kolejka SRS, w jej kolejności. Rozdanie z kolejki może
@@ -233,8 +246,7 @@ export function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, 
   // świeżo. W swobodnej grze token stoi na 0, dzięki czemu RESTART nadal nie fabrykuje
   // nowego czasu.
   const timer = useDealTimer({
-    // Offline nie ma oceny, więc odliczanie do „zaliczone jako błąd" nie miałoby czego zapisać.
-    enabled: timedMode && !!selectedDeal && !readOnly,
+    enabled: timedMode && !!selectedDeal,
     phase: state?.phase,
     limitSeconds: timerLimit,
     resetKey: selectedDeal ? `${selectedDeal.id}|${session.sessionToken}` : null,
@@ -409,7 +421,7 @@ export function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, 
         )}
 
         {!session.active && session.pausedProgress && (
-          <PausedSessionBar progress={session.pausedProgress} onResume={readOnly ? undefined : session.resume} />
+          <PausedSessionBar progress={session.pausedProgress} onResume={session.resume} />
         )}
 
         <PomodoroBreak pomodoro={pomodoro} onNext={onStartPomodoro} />
@@ -433,9 +445,8 @@ export function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, 
             onStartExtra={session.startExtra}
             onResumeSession={() => session.resume()}
             onDiscardSession={session.discard}
-            onStartPomodoro={!readOnly && canStartPomodoro(pomodoro.phase) && canTrain(session) ? onStartPomodoro : undefined}
+            onStartPomodoro={canStartPomodoro(pomodoro.phase) && canTrain(session) ? onStartPomodoro : undefined}
             pomodoroConfig={pomodoro.config}
-            readOnly={readOnly}
           />
         ) : (
           <>
@@ -447,7 +458,7 @@ export function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, 
                 deal={selectedDeal}
                 state={state}
                 timer={<DealTimer remaining={timer.remaining} limit={timerLimit} visible={timer.visible} />}
-                report={readOnly ? undefined : <ReportDealButton deal={selectedDeal} />}
+                report={offline ? undefined : <ReportDealButton deal={selectedDeal} />}
               />
             </div>
 
@@ -478,7 +489,6 @@ export function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, 
               onCorrect={() => handleRate(true)}
               onWrong={() => handleRate(false)}
               timedOut={timer.expired}
-              readOnly={readOnly}
             />
           </>
         )}
@@ -536,10 +546,8 @@ function SessionComplete({ session, extraSize, onStartExtra, onClose }: {
 
 function WelcomeScreen({
   todayDeals, onSelect, pausedProgress, extraSize, onStartSession, onStartExtra, onResumeSession, onDiscardSession, onStartPomodoro,
-  pomodoroConfig, readOnly = false,
+  pomodoroConfig,
 }: {
-  /** Offline: zamiast przycisków startu jest informacja, że trening wymaga połączenia. */
-  readOnly?: boolean;
   /** Dzisiejsza kolejka SRS — ta sama, którą pokazuje panel boczny. */
   todayDeals: Deal[];
   onSelect: (id: string) => void;
@@ -578,9 +586,7 @@ function WelcomeScreen({
           <span className="text-brand-text">Bridge</span><span className="text-brand-accent-soft">Loop</span>
         </h2>
         <p className="text-brand-dim text-sm max-w-md">
-          {readOnly
-            ? 'Offline — trening wymaga połączenia. Rozdania możesz przeglądać z listy.'
-            : pausedExtra
+          {pausedExtra
             ? 'Masz przerwaną partię dodatkową — wróć do niej tam, gdzie ją zostawiłeś, albo ją zakończ.'
             : pausedProgress
             ? 'Masz przerwaną sesję na dziś — wróć do niej tam, gdzie ją zostawiłeś, albo zacznij od nowa.'
@@ -588,7 +594,7 @@ function WelcomeScreen({
         </p>
       </div>
 
-      {readOnly ? null : pausedProgress ? (
+      {pausedProgress ? (
         <div className="flex flex-col items-center gap-3">
           <button
             onClick={onResumeSession}

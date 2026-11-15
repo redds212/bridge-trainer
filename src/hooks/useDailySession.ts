@@ -11,6 +11,7 @@ import { normalizeEntry, isAnsweredToday } from '../lib/srs';
 import { useDayKey } from './useDayKey';
 import { isOfflineFailure } from '../lib/network';
 import { cacheGet, cachePut, cacheKeys } from '../lib/localCache';
+import { flushOutbox, outboxClearSession, outboxPending, outboxPutSession } from '../lib/outbox';
 
 interface Runtime {
   session: DailySession;
@@ -28,8 +29,8 @@ interface Args {
   applyResult: (id: string, correct: boolean) => void;
   recordHistory: (id: string, correct: boolean, phase: AttemptPhase) => void;
   /**
-   * Brak sieci: migawka idzie z kopii lokalnej, a sesji nie da się zacząć, wznowić
-   * ani porzucić (etap 2 trybu offline — trening bez sieci dojdzie w etapie 3).
+   * Brak sieci: migawka idzie z kopii lokalnej. Sesja działa dalej — jej stan czeka
+   * w kolejce zapisów i po powrocie sieci zastępuje migawkę z serwera (O3).
    */
   offline?: boolean;
 }
@@ -91,6 +92,18 @@ function advance(rt: Runtime): Runtime | 'done' {
 }
 
 /**
+ * Ustawia wskaźnik na pierwszym slocie od `from`, którego rozdanie nie było dziś
+ * ocenione; `'done'`, gdy takiego nie ma. Migawka nie wie o ocenach wystawionych poza
+ * nią — w swobodnej grze albo na innym urządzeniu w czasie offline (O3).
+ */
+function nextOpen(rt: Runtime, from: number, store: SRSStore, now: Date): Runtime | 'done' {
+  const { slots } = rt.session;
+  let index = from;
+  while (index < slots.length && isAnsweredToday(normalizeEntry(store[slots[index].dealId]), now)) index++;
+  return index < slots.length ? { ...rt, index, token: rt.token + 1 } : 'done';
+}
+
+/**
  * Sesja dzienna i dodatkowa partia z migawką w bazie (`daily_sessions`) — patrz
  * docs/SESSION_RESUME_PLAN.md.
  *
@@ -120,24 +133,41 @@ export function useDailySession(args: Args) {
   const storeRef = useRef(store);
   storeRef.current = store;
 
-  const clearRow = useCallback(() => {
+  // Sesja, którą to urządzenie ma teraz w pamięci — w toku albo wstrzymana.
+  const liveRef = useRef<Runtime | null>(null);
+  liveRef.current = runtime ?? paused;
+  const hydratedRef = useRef<string | null>(null);
+
+  /** `day`: doba kasowanej migawki — nowszej (z innego urządzenia) baza nie ruszy. */
+  const clearRow = useCallback((day: string) => {
     syncedRef.current = null;
-    // Offline nic nie kasujemy — ani w bazie, ani w kopii: kopia ma odpowiadać temu,
-    // co leży na serwerze, a o wczorajszej migawce i tak rozstrzyga data przy wczytaniu.
-    if (!userId || offline) return;
+    if (!userId) return;
     void cachePut(cacheKeys.session(userId), null);
-    supabase.from('daily_sessions').delete().eq('user_id', userId)
-      .then(({ error }) => { if (error) console.error('Session clear failed:', error.message); });
-  }, [userId, offline]);
+    outboxClearSession(userId, day);
+  }, [userId]);
 
   // Hydratacja przy logowaniu. Migawka z innego dnia jest ignorowana (D2) —
   // zostanie nadpisana przy pierwszym starcie, więc nie ma czego sprzątać.
   useEffect(() => {
-    if (!userId) { setRuntime(null); setPaused(null); setLegacyRow(null); setLoading(false); return; }
+    if (!userId) {
+      setRuntime(null); setPaused(null); setLegacyRow(null); setLoading(false);
+      hydratedRef.current = null;
+      return;
+    }
+    // To samo konto, zmienił się tylko stan sieci — ciche odświeżenie, patrz `useSRS`.
+    const resync = hydratedRef.current === userId;
+    if (resync && offline) return;
     let active = true;
-    setLoading(true);
-    const hydrate = (data: DailySessionRow | null) => {
+    if (!resync) setLoading(true);
+    const hydrate = async (data: DailySessionRow | null) => {
+        // Niewysłany stan sesji z tego urządzenia wygrywa z tym, co przyszło (O3).
+        const op = (await outboxPending(userId)).session;
+        if (op) data = op.kind === 'put' ? op.row : null;
         if (!active) return;
+        hydratedRef.current = userId;
+        // Powrót sieci przy sesji w toku albo wstrzymanej: kolejka z tego urządzenia
+        // zostaje, a jej stan poszedł już do bazy razem z resztą kolejki zapisów.
+        if (resync && liveRef.current) { setLoading(false); return; }
         const row = data && toDateKey(data.date) === todayKey() ? data : null;
         const snap = row?.slots?.length ? rowToRuntime(row) : null;
         // Wiersz ze starszej wersji zapisany w buforze ma wyczerpany przebieg główny —
@@ -150,17 +180,18 @@ export function useDailySession(args: Args) {
         setLoading(false);
     };
     const fromCache = async () => hydrate(await cacheGet<DailySessionRow>(cacheKeys.session(userId)));
-    if (offline) { void fromCache(); return () => { active = false; }; }
 
-    supabase.from('daily_sessions').select('*').eq('user_id', userId).maybeSingle()
-      .then(({ data, error }) => {
-        if (isOfflineFailure(error)) { void fromCache(); return; }
-        if (error) console.error('Session load failed:', error.message);
-        // Bufor ze starszej wersji (D13) rozliczamy tylko z wiersza z bazy — w kopii
-        // go nie trzymamy, żeby odczyt offline nie wymierzał kar po raz drugi.
-        else void cachePut(cacheKeys.session(userId), data ? { ...data, buffer: [] } : null);
-        hydrate(data);
-      });
+    void (async () => {
+      // Najpierw własne zapisy, potem świeży stan (O6).
+      if (offline || await flushOutbox(userId) === 'offline') { await fromCache(); return; }
+      const { data, error } = await supabase.from('daily_sessions').select('*').eq('user_id', userId).maybeSingle();
+      if (isOfflineFailure(error)) { await fromCache(); return; }
+      if (error) console.error('Session load failed:', error.message);
+      // Bufor ze starszej wersji (D13) rozliczamy tylko z wiersza z bazy — w kopii
+      // go nie trzymamy, żeby odczyt offline nie wymierzał kar po raz drugi.
+      else void cachePut(cacheKeys.session(userId), data ? { ...data, buffer: [] } : null);
+      await hydrate(data);
+    })();
     return () => { active = false; };
   }, [userId, offline]);
 
@@ -185,47 +216,47 @@ export function useDailySession(args: Args) {
   const dayRef = useRef(dayKey);
   useEffect(() => {
     if (dayRef.current === dayKey) return;
+    const previousDay = dayRef.current;
     dayRef.current = dayKey;
     setRuntime(null);
     setPaused(null);
-    setCompleted(null); // podsumowanie wczorajszej sesji nie ma czego pilnować
-    clearRow();         // wiersz w bazie jest z wczoraj
+    setCompleted(null);    // podsumowanie wczorajszej sesji nie ma czego pilnować
+    clearRow(previousDay); // wiersz w bazie jest z wczoraj
   }, [dayKey, clearRow]);
 
-  // Zapis write-through: każdy nowy stan sesji ląduje w bazie, tak samo jak
-  // wyniki w `useSRS`. Dzięki temu awaryjne zamknięcie karty nic nie kosztuje.
+  // Zapis write-through: każdy nowy stan sesji ląduje w kopii lokalnej i w kolejce
+  // zapisów, tak samo jak wyniki w `useSRS`. Dzięki temu awaryjne zamknięcie karty
+  // nic nie kosztuje — także bez sieci.
   useEffect(() => {
-    if (!userId || loading || offline) return;
+    if (!userId || loading) return;
     const snap = runtime ?? paused;
     if (!snap || snap === syncedRef.current) return;
     syncedRef.current = snap;
     const row = runtimeToRow(userId, snap);
     void cachePut(cacheKeys.session(userId), row);
-    supabase.from('daily_sessions').upsert(row, { onConflict: 'user_id' })
-      .then(({ error }) => { if (error) console.error('Session save failed:', error.message); });
-  }, [runtime, paused, userId, loading, offline]);
+    outboxPutSession(userId, row);
+  }, [runtime, paused, userId, loading]);
 
   const commit = useCallback((next: Runtime | 'done', finished: DailySession) => {
     if (next !== 'done') { setRuntime(next); return; }
     setCompleted(finished);
     setRuntime(null);
     setPaused(null);
-    clearRow(); // ukończonej sesji nie ma po co wznawiać
+    clearRow(finished.date); // ukończonej sesji nie ma po co wznawiać
   }, [clearRow]);
 
   /** Start gotowej kolejki — sesji dziennej albo partii. Zastępuje wstrzymaną migawkę. */
   const begin = useCallback((session: DailySession) => {
-    if (offline) return;
     setCompleted(null);
     setPaused(null);
     if (!session.slots.length) {
       setCompleted(session); // nothing to do — surface an empty summary
       setRuntime(null);
-      clearRow();
+      clearRow(session.date);
       return;
     }
     setRuntime({ session, index: 0, token: 1 });
-  }, [clearRow, offline]);
+  }, [clearRow]);
 
   const start = useCallback(() => {
     begin(generateDailySession(deals, store, settings, dayNow));
@@ -243,19 +274,23 @@ export function useDailySession(args: Args) {
     setRuntime(null);
   }, [runtime]);
 
+  /**
+   * Wznowienie pomija rozdania ocenione dziś poza sesją — w swobodnej grze albo na
+   * innym urządzeniu. Gdy nie zostaje żadne, sesja zamyka się sama (O3).
+   */
   const resume = useCallback(() => {
-    if (!paused || offline) return;
+    if (!paused) return;
     setCompleted(null);
-    setRuntime({ ...paused, token: paused.token + 1 });
     setPaused(null);
-  }, [paused, offline]);
+    commit(nextOpen(paused, paused.index, storeRef.current, dayNow), paused.session);
+  }, [paused, commit, dayNow]);
 
   /** Porzucenie wstrzymanej migawki bez startu nowej — wyniki zostają, znika sama kolejka (D16). */
   const discard = useCallback(() => {
-    if (!paused || offline) return;
+    if (!paused) return;
     setPaused(null);
-    clearRow();
-  }, [paused, clearRow, offline]);
+    clearRow(paused.session.date);
+  }, [paused, clearRow]);
 
   const dismissCompleted = useCallback(() => setCompleted(null), []);
 
@@ -319,7 +354,7 @@ export function useDailySession(args: Args) {
       commit('done', next);
     } else {
       setPaused(null);
-      clearRow();
+      clearRow(next.date);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runtime, paused, deals.length, settings.dailyTarget, settings.mode, dayNow, commit, clearRow]);
@@ -334,8 +369,8 @@ export function useDailySession(args: Args) {
     if (!id) return;
     recordHistory(id, correct, 'main');
     applyResult(id, correct);
-    commit(advance(runtime), runtime.session);
-  }, [runtime, recordHistory, applyResult, commit]);
+    commit(nextOpen(runtime, runtime.index + 1, storeRef.current, dayNow), runtime.session);
+  }, [runtime, recordHistory, applyResult, commit, dayNow]);
 
   return {
     active: runtime !== null,

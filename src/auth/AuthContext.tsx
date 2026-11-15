@@ -3,6 +3,7 @@ import { isAuthRetryableFetchError, type Session } from '@supabase/supabase-js';
 import { supabase, AUTH_STORAGE_KEY } from '../lib/supabase';
 import { isOfflineFailure } from '../lib/network';
 import { cacheGet, cachePut, cacheClearUser, cacheKeys, requestPersistentStorage } from '../lib/localCache';
+import { flushOutbox, outboxReset } from '../lib/outbox';
 import { DEFAULT_DAILY_TARGET } from '../lib/session';
 import type { AppUser, LearningMode } from '../types';
 
@@ -129,6 +130,9 @@ function fallbackProfile({ id, email }: Identity): AppUser {
  */
 const OFFLINE_START_DELAY_MS = 2500;
 
+/** Co tyle tryb offline sam sprawdza, czy sieć wróciła. */
+const OFFLINE_RETRY_MS = 120_000;
+
 /** Profil z kopii lokalnej albo — gdy jej nie ma — zastępczy, który zatrzyma się na ekranie „brak sieci". */
 async function offlineProfile(fallback: AppUser): Promise<ProfileLoad> {
   const cached = await cacheGet<CachedProfile>(cacheKeys.profile(fallback.id));
@@ -178,7 +182,9 @@ async function loadProfile(identity: Identity | null, hasSession: boolean): Prom
     void cachePut(cacheKeys.profile(authId), cached);
     requestPersistentStorage();
   } else {
-    // Serwer potwierdził, że konto nie ma dostępu — kopia lokalna znika (O4).
+    // Serwer potwierdził, że konto nie ma dostępu — kopia lokalna znika, a oceny
+    // zebrane offline odpadają razem z nią (O4).
+    outboxReset();
     void cacheClearUser(authId);
   }
   return { user, offline: false, offlineSince: null };
@@ -279,6 +285,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // sesji z dysku nie usuwając. Usuwamy ją więc sami, od razu.
       dropLocalSession();
     } else {
+      // Z siecią: najpierw wysyłka tego, co czeka, dopiero potem wylogowanie (O7).
+      if (id) await flushOutbox(id);
       const { error } = await supabase.auth.signOut();
       if (error) {
         // Sieć padła w trakcie: z tego urządzenia sesja ma zniknąć mimo wszystko,
@@ -288,6 +296,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     writeIdentity(null);
+    outboxReset();
     if (id) await cacheClearUser(id);
     setUser(null);
     setOffline(false);
@@ -333,15 +342,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Powrót sieci sam ściąga profil — użytkownik nie musi klikać „Spróbuj ponownie".
   // iPhone nie zawsze zgłasza `online`, więc w trybie offline próbujemy też przy
-  // każdym powrocie do aplikacji.
+  // każdym powrocie do aplikacji i co dwie minuty, gdy jest otwarta: trening bez sieci
+  // potrafi trwać długo, a zebrane oceny mają wyjść, gdy tylko się da (O6).
   useEffect(() => {
     const onOnline = () => { void refreshProfile(); };
     const onVisible = () => { if (offline && document.visibilityState === 'visible') void refreshProfile(); };
     window.addEventListener('online', onOnline);
     document.addEventListener('visibilitychange', onVisible);
+    const timer = offline ? setInterval(onVisible, OFFLINE_RETRY_MS) : undefined;
     return () => {
       window.removeEventListener('online', onOnline);
       document.removeEventListener('visibilitychange', onVisible);
+      clearInterval(timer);
     };
   }, [refreshProfile, offline]);
 

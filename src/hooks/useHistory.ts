@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Attempt, AttemptPhase } from '../types';
 import type { AttemptRow } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
 import { todayKey } from '../lib/date';
 import { isOfflineFailure } from '../lib/network';
 import { cacheGet, cachePut, cacheKeys } from '../lib/localCache';
+import { flushOutbox, outboxAddAttempt, outboxDrop, outboxPending } from '../lib/outbox';
 
 export interface HistoryStats {
   totalAttempts: number;
@@ -17,7 +18,7 @@ export interface HistoryStats {
   perDay: { day: string; count: number; correct: number }[];
 }
 
-function rowToAttempt(r: AttemptRow): Attempt {
+function rowToAttempt(r: Pick<AttemptRow, 'deal_id' | 'correct' | 'phase' | 'ts'>): Attempt {
   return { dealId: r.deal_id, correct: r.correct, phase: r.phase, ts: r.ts };
 }
 
@@ -55,71 +56,94 @@ function computeStats(attempts: Attempt[], now: Date = new Date()): HistoryStats
   return { totalAttempts, totalCorrect, activeDays, avgPerDay, streak, solvedToday, perDay };
 }
 
+const attemptKey = (a: Attempt) => `${a.ts}|${a.dealId}`;
+
+/** Dokłada podejścia, których na liście jeszcze nie ma, i układa całość po czasie. */
+function mergeAttempts(base: Attempt[], extra: Attempt[]): Attempt[] {
+  if (!extra.length) return base;
+  const seen = new Set(base.map(attemptKey));
+  const added = extra.filter(a => !seen.has(attemptKey(a)));
+  if (!added.length) return base;
+  return [...base, ...added].sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0));
+}
+
 /**
  * Attempt history backed by the `attempts` table. Hydrated on login; new
- * attempts append in memory and insert through to the database.
+ * attempts append in memory and go out through the write queue (`lib/outbox`).
  *
- * `offline`: historia idzie z kopii lokalnej i jest tylko do odczytu (etap 2 trybu
- * offline; dopisywanie bez sieci dojdzie w etapie 3).
+ * `offline`: historia idzie z kopii lokalnej; nowe podejścia dopisują się dalej i
+ * czekają w kolejce (etap 3 trybu offline). Zablokowane zostaje tylko „wyczyść".
  */
 export function useHistory(userId: string | null, offline = false) {
   const [attempts, setAttempts] = useState<Attempt[]>([]);
   const [loading, setLoading] = useState(true);
   // Konto, dla którego lista jest wiarygodna — patrz `useSRS`.
   const [hydratedFor, setHydratedFor] = useState<string | null>(null);
+  const hydratedRef = useRef<string | null>(null);
+  // Podejścia dopisane w trakcie wczytywania — odpowiedź z bazy jeszcze ich nie zna.
+  const addedRef = useRef<Attempt[]>([]);
 
   useEffect(() => {
-    if (!userId) { setAttempts([]); setHydratedFor(null); setLoading(false); return; }
+    if (!userId) { setAttempts([]); setHydratedFor(null); hydratedRef.current = null; setLoading(false); return; }
+    const resync = hydratedRef.current === userId; // ciche odświeżenie — patrz `useSRS`
+    if (resync && offline) return;
     let active = true;
-    setLoading(true);
-    setHydratedFor(null);
-    const finish = (list: Attempt[] | null) => {
+    if (!resync) { setLoading(true); setHydratedFor(null); }
+    addedRef.current = [];
+
+    const finish = async (list: Attempt[] | null) => {
+      const pending = (await outboxPending(userId)).attempts.map(rowToAttempt);
       if (!active) return;
-      if (list) setAttempts(list);
-      setHydratedFor(list ? userId : null);
+      if (list) {
+        setAttempts(mergeAttempts(mergeAttempts(list, pending), addedRef.current));
+        hydratedRef.current = userId;
+        setHydratedFor(userId);
+      }
       setLoading(false);
     };
     const fromCache = async () => finish(await cacheGet<Attempt[]>(cacheKeys.attempts(userId)));
-    if (offline) { void fromCache(); return () => { active = false; }; }
 
-    supabase.from('attempts').select('*').eq('user_id', userId).order('ts', { ascending: true })
-      .then(({ data, error }) => {
-        if (isOfflineFailure(error)) { void fromCache(); return; }
-        if (error) console.error('History load failed:', error.message);
-        finish(error || !data ? null : data.map(rowToAttempt));
-      });
+    void (async () => {
+      // Najpierw własne zapisy, potem świeży stan (O6).
+      if (offline || await flushOutbox(userId) === 'offline') { await fromCache(); return; }
+      const { data, error } = await supabase.from('attempts').select('*')
+        .eq('user_id', userId).order('ts', { ascending: true });
+      if (isOfflineFailure(error)) { await fromCache(); return; }
+      if (error) console.error('History load failed:', error.message);
+      await finish(error || !data ? null : data.map(rowToAttempt));
+    })();
     return () => { active = false; };
   }, [userId, offline]);
 
   useEffect(() => {
-    if (!userId || offline || hydratedFor !== userId) return;
+    if (!userId || hydratedFor !== userId) return;
     void cachePut(cacheKeys.attempts(userId), attempts);
-  }, [attempts, userId, offline, hydratedFor]);
+  }, [attempts, userId, hydratedFor]);
 
   const record = useCallback((dealId: string, correct: boolean, phase: AttemptPhase) => {
-    if (offline) return;
     // Czas i id nadaje urządzenie: `ts` to chwila odpowiedzi (nie dotarcia do bazy),
     // a `client_id` sprawia, że ponowiona wysyłka nie dopisze podejścia drugi raz.
-    const ts = new Date().toISOString();
-    setAttempts(prev => [...prev, { dealId, correct, phase, ts }]);
+    const attempt: Attempt = { dealId, correct, phase, ts: new Date().toISOString() };
+    addedRef.current.push(attempt);
+    setAttempts(prev => [...prev, attempt]);
     if (userId) {
-      supabase.from('attempts')
-        .upsert(
-          { user_id: userId, deal_id: dealId, correct, phase, ts, client_id: crypto.randomUUID() },
-          { onConflict: 'user_id,client_id', ignoreDuplicates: true },
-        )
-        .then(({ error }) => { if (error) console.error('History save failed:', error.message); });
+      outboxAddAttempt(userId, {
+        user_id: userId, deal_id: dealId, correct, phase, ts: attempt.ts, client_id: crypto.randomUUID(),
+      });
     }
-  }, [userId, offline]);
+  }, [userId]);
 
-  const clear = useCallback(() => {
+  // Wymaga sieci (O5): lista znika dopiero, gdy baza potwierdzi skasowanie.
+  const clear = useCallback(async () => {
     if (offline) return;
-    setAttempts([]);
     if (userId) {
-      supabase.from('attempts').delete().eq('user_id', userId)
-        .then(({ error }) => { if (error) console.error('History clear failed:', error.message); });
+      const { error } = await supabase.from('attempts').delete().eq('user_id', userId);
+      if (error) { console.error('History clear failed:', error.message); return; }
+      outboxDrop(userId, 'attempts');
     }
+    setAttempts([]);
   }, [userId, offline]);
 
   return { attempts, record, clear, stats: computeStats(attempts), loading };
 }
+

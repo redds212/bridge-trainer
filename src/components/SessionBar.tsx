@@ -12,8 +12,7 @@ interface Props {
  */
 export function PausedSessionBar({ progress, onResume }: {
   progress: SessionProgress;
-  /** Brak = bez przycisku „Wznów" (tryb offline: sesji nie da się kontynuować). */
-  onResume?: () => void;
+  onResume: () => void;
 }) {
   const { type, done, total } = progress;
   const pct = total ? Math.round((done / total) * 100) : 0;

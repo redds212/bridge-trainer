@@ -36,9 +36,9 @@ interface Props {
   onPomodoroConfigChange: (patch: Partial<PomodoroConfig>) => void;
   onClearHistory: () => void;
   onResetProgress: () => void | Promise<void>;
-  /** Tryb offline: wszystko, co zapisuje, jest wyłączone (docs/OFFLINE_PLAN.md, O1 i O5). */
+  /** Tryb offline: trening działa, wyłączone są ustawienia, hasło i kasowanie całości (docs/OFFLINE_PLAN.md, O1 i O5). */
   readOnly?: boolean;
-  /** Pasek stanu pod nagłówkiem — dziś tylko „Offline · dane z …". */
+  /** Pasek stanu pod nagłówkiem — tryb offline i niewysłane zapisy. */
   banner?: ReactNode;
   onBack: () => void;
 }
@@ -156,9 +156,7 @@ export function UserPanel({
             </div>
           )}
           <div className="flex items-center gap-3 flex-wrap">
-            {readOnly ? (
-              <span className="text-amber-200/90 text-xs">Offline — trening wymaga połączenia.</span>
-            ) : pausedProgress ? (
+            {pausedProgress ? (
               <>
                 <button
                   onClick={onResumeSession}

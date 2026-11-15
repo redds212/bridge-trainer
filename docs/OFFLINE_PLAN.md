@@ -1,8 +1,9 @@
 # Tryb offline — uzgodniony plan
 
-Stan: **plan zatwierdzony 2026-11-14. Etap 1 wdrożony (migracja 0012 + zapis `rated_at`
-i `client_id`). Etap 2 napisany i sprawdzony w Chrome z podstawionym Supabase; czeka na
-test na iPhonie (lista kontrolna na końcu pliku).**
+Stan: **plan zatwierdzony 2026-11-14. Etapy 1 i 2 wdrożone 2026-11-14 (migracja 0012,
+zapis `rated_at` i `client_id`, kopia lokalna). Etap 3 napisany 2026-11-15 i sprawdzony
+w Chrome z podstawionym Supabase; czeka na wdrożenie i test na iPhonie (lista kontrolna
+na końcu pliku). Etap 4: zostało ostrzeżenie przy wylogowaniu offline.**
 Urządzenie docelowe: iPhone, aplikacja dodana do ekranu początkowego. Przerwy w sieci
 do 24–36 godzin.
 
@@ -141,8 +142,8 @@ na produkcji co najmniej dzień przed etapem 3.
 - Kopia powstaje przy każdym udanym wczytaniu online i podąża za stanem w pamięci, więc
   obejmuje też oceny wystawione po wczytaniu.
 - Brak sieci rozpoznajemy po nieudanym zapytaniu (`src/lib/network.ts`). Hooki danych
-  czytają wtedy z kopii i pomijają każdą mutację; interfejs chowa albo wyłącza wszystko,
-  co zapisuje.
+  czytają wtedy z kopii. W etapie 2 pomijały każdą mutację; od etapu 3 zapisy idą do
+  kolejki (niżej), a wyłączone zostaje tylko to, co wymaga sieci według O1 i O5.
 - Tożsamość zalogowanego konta jest pamiętana osobno (`bridgeloop.identity` w
   localStorage). Po godzinie bez sieci token wygasa, a supabase-js zwraca wtedy
   `session: null` — bez własnego zapisu aplikacja pokazałaby ekran logowania.
@@ -169,3 +170,60 @@ Warunek: aplikacja dodana do ekranu początkowego i uruchamiana z ikony.
    Oczekiwane: po 2–3 sekundach znów tryb offline, nie ekran logowania.
 8. Wyłącz tryb samolotowy i wróć do aplikacji. Oczekiwane: pasek znika sam albo po
    „Połącz", wracają przyciski sesji i oceny.
+
+## Etap 3 — jak działa kolejka zapisów
+
+- Każdy zapis postępów idzie przez kolejkę (`src/lib/outbox.ts`), także online: ocena,
+  podejście i stan sesji trafiają do pamięci i do IndexedDB (klucz `outbox`), a stamtąd
+  do Supabase. Z siecią wysyłka następuje od razu, więc online nic się nie zmienia.
+- Kolejka jest scalona: jeden wiersz powtórek na rozdanie (ostatni zapis zastępuje
+  poprzedni), lista podejść „tylko dopisz", jeden ostatni stan sesji (migawka albo jej
+  skasowanie).
+- Kopia lokalna podąża za stanem w pamięci także bez sieci, więc oceny wystawione offline
+  przeżywają zamknięcie aplikacji.
+- Wczytanie danych zawsze zaczyna się od wysyłki kolejki, dopiero potem idzie pobranie
+  (O6). Na pobrany stan nakładane są zapisy, które jeszcze nie wyszły.
+- Okazje do wysyłki: każdy nowy zapis, zdarzenie `online`, powrót do aplikacji, co dwie
+  minuty przy otwartej aplikacji, przycisk w pasku stanu. W trybie offline z logowania
+  wysyłka stoi, dopóki odświeżenie profilu nie potwierdzi sieci i dostępu (O4).
+- Powrót sieci odświeża dane po cichu — bez ekranu ładowania, rozdanie i sesja w toku
+  zostają na stole.
+- Pasek stanu: „Offline · dane z … · N do wysłania" (start bez sieci), „Offline · N do
+  wysłania" (sieć padła w trakcie), „Wysyłanie… (N)", „Nie udało się wysłać (N) · ponowię".
+  N to liczba rozdań z niewysłanymi zapisami.
+- Reguły:
+  - O2 — rozstrzyga wyzwalacz bazy po `rated_at`; telefon po wysyłce pobiera wynik.
+  - O3 — stan sesji z telefonu nadpisuje wiersz na serwerze; migawka z poprzedniej doby
+    nie jest wysyłana; kasowanie dotyczy tylko migawki z tej samej albo starszej doby.
+    Sesja pomija rozdania ocenione dziś poza nią (swobodna gra, inne urządzenie) — także
+    online; gdy nie zostaje żadne, zamyka się sama.
+  - O5 — reset rozdania i RESTART to zapis wiersza „nowe" z godziną, nie kasowanie.
+    „Wyczyść historię" i „Usuń postępy" wymagają sieci i czyszczą dopiero po
+    potwierdzeniu z bazy.
+  - O8 — ocena rozdania usuniętego na stałe odpada przy wysyłce (błąd klucza obcego),
+    reszta wsadu idzie dalej.
+  - O4, O7 — cofnięty dostęp i wylogowanie kasują kolejkę razem z kopią; wylogowanie
+    z siecią najpierw wysyła kolejkę. Ostrzeżenie „masz N niewysłanych ocen" przy
+    wylogowaniu offline zostaje na etap 4.
+
+## Lista kontrolna iPhone — etap 3
+
+Warunek: aplikacja uruchamiana z ikony, po wdrożeniu otwarta raz z siecią.
+
+1. Z siecią: otwórz aplikację, zacznij sesję dzienną, oceń jedno rozdanie, przerwij sesję.
+2. Zamknij aplikację. Włącz tryb samolotowy. Otwórz aplikację.
+   Oczekiwane: pasek „Offline · dane z …" i przycisk „Wznów sesję".
+3. Wznów sesję i oceń dwa rozdania. Oczekiwane: sesja idzie dalej, pasek pokazuje
+   „2 do wysłania".
+4. Przerwij sesję, wybierz z listy inne rozdanie i oceń je. Oczekiwane: „3 do wysłania".
+5. Zamknij aplikację (wyrzuć z listy otwartych) i otwórz ponownie, dalej w trybie
+   samolotowym. Oczekiwane: nadal „3 do wysłania", sesja czeka w tym samym miejscu,
+   ocenione rozdania mają na liście nowy status.
+6. „Mój panel": historia zawiera oceny z punktów 3–4; „Usuń postępy" jest nieaktywne.
+7. Wyłącz tryb samolotowy i wróć do aplikacji. Oczekiwane: pasek znika w kilka sekund
+   (sam albo po „Połącz"), rozdanie na stole się nie resetuje.
+8. Na komputerze otwórz bridgeloop.pl. Oczekiwane: oceny z punktów 3–4 są w historii
+   i w powtórkach, a wstrzymana sesja jest tą z telefonu.
+9. Konflikt: w trybie samolotowym oceń na telefonie rozdanie X. Potem na komputerze oceń
+   to samo rozdanie X inaczej. Wyłącz tryb samolotowy. Oczekiwane: na obu urządzeniach
+   zostaje ocena z komputera (późniejsza), a w historii są oba podejścia.

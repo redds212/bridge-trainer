@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { getDefaultEntry, normalizeEntry, applyAnswer, isReviewDue, MAX_STEP } from '../lib/srs';
 import { isOfflineFailure } from '../lib/network';
 import { cacheGet, cachePut, cacheKeys } from '../lib/localCache';
+import { flushOutbox, outboxDrop, outboxPending, outboxPutSrs } from '../lib/outbox';
 
 // Re-export so existing imports (`from '../hooks/useSRS'`) keep working.
 export { getDefaultEntry, isReviewDue };
@@ -36,13 +37,23 @@ function entryToRow(userId: string, dealId: string, e: SRSEntry): SrsProgressRow
   };
 }
 
+/** Wiersz „nowe" — tak zapisujemy reset rozdania (O5); w pamięci to po prostu brak wpisu. */
+const isBlankRow = (r: SrsProgressRow) => r.status === 'NEW' && !r.last_seen && !r.flag_difficult;
+
+function overlayRows(store: SRSStore, rows: SrsProgressRow[]) {
+  for (const r of rows) {
+    if (isBlankRow(r)) delete store[r.deal_id];
+    else store[r.deal_id] = rowToEntry(r);
+  }
+}
+
 /**
  * SRS store backed by the `srs_progress` table. The in-memory `store` is
  * hydrated on login and kept as the synchronous source of truth; mutations
- * update it optimistically and write through to the database.
+ * update it optimistically and go out through the write queue (`lib/outbox`).
  *
- * `offline`: stan idzie z kopii lokalnej i jest tylko do odczytu — każda mutacja
- * jest pomijana (etap 2 trybu offline; kolejka zapisów dojdzie w etapie 3).
+ * `offline`: stan idzie z kopii lokalnej. Oceny działają dalej — czekają w kolejce
+ * na powrót sieci (etap 3 trybu offline). Zablokowane zostaje tylko „wyczyść wszystko".
  */
 export function useSRS(userId: string | null, offline = false) {
   const [store, setStore] = useState<SRSStore>({});
@@ -52,105 +63,103 @@ export function useSRS(userId: string | null, offline = false) {
   // Konto, dla którego `store` jest wiarygodny (wczytany z bazy albo z kopii). Po
   // nieudanym wczytaniu zostaje `null`, żeby pusty stan nie nadpisał dobrej kopii.
   const [hydratedFor, setHydratedFor] = useState<string | null>(null);
+  const hydratedRef = useRef<string | null>(null);
+  // Rozdania zmienione lokalnie w trakcie wczytywania — ich stan z pamięci wygrywa
+  // z tym, co za chwilę przyjdzie z bazy.
+  const dirtyRef = useRef(new Set<string>());
 
   useEffect(() => {
-    if (!userId) { setStore({}); setHydratedFor(null); setLoading(false); return; }
+    if (!userId) { setStore({}); setHydratedFor(null); hydratedRef.current = null; setLoading(false); return; }
+    // To samo konto, zmienił się tylko stan sieci: odświeżamy po cichu, bez ekranu
+    // ładowania, żeby powrót sieci nie zrywał rozdania w toku.
+    const resync = hydratedRef.current === userId;
+    if (resync && offline) return; // pamięć już jest prawdą, a kopia za nią podąża
     let active = true;
-    setLoading(true);
-    setHydratedFor(null);
-    const finish = (s: SRSStore, ok: boolean) => {
+    if (!resync) { setLoading(true); setHydratedFor(null); }
+    dirtyRef.current = new Set();
+
+    const finish = async (s: SRSStore, ok: boolean) => {
+      overlayRows(s, Object.values((await outboxPending(userId)).srs));
       if (!active) return;
-      setStore(s);
-      setHydratedFor(ok ? userId : null);
+      if (ok || !resync) {
+        for (const id of dirtyRef.current) {
+          const local = storeRef.current[id];
+          if (local) s[id] = local; else delete s[id];
+        }
+        storeRef.current = s;
+        setStore(s);
+      }
+      if (ok) { hydratedRef.current = userId; setHydratedFor(userId); }
       setLoading(false);
     };
     const fromCache = async () => {
       const cached = await cacheGet<SRSStore>(cacheKeys.srs(userId));
-      finish(cached ?? {}, cached !== null);
+      await finish(cached ?? {}, cached !== null);
     };
-    if (offline) { void fromCache(); return () => { active = false; }; }
 
-    supabase.from('srs_progress').select('*').eq('user_id', userId).then(({ data, error }) => {
-      if (isOfflineFailure(error)) { void fromCache(); return; }
+    void (async () => {
+      // Najpierw własne zapisy, potem świeży stan (O6).
+      if (offline || await flushOutbox(userId) === 'offline') { await fromCache(); return; }
+      const { data, error } = await supabase.from('srs_progress').select('*').eq('user_id', userId);
+      if (isOfflineFailure(error)) { await fromCache(); return; }
       const s: SRSStore = {};
       if (error) console.error('SRS load failed:', error.message);
-      else if (data) for (const r of data) s[r.deal_id] = rowToEntry(r);
-      finish(s, !error);
-    });
+      else if (data) overlayRows(s, data);
+      await finish(s, !error);
+    })();
     return () => { active = false; };
   }, [userId, offline]);
 
-  // Kopia lokalna podąża za stanem w pamięci, więc obejmuje też oceny wystawione
-  // po wczytaniu — nie tylko to, co było w bazie przy starcie.
+  // Kopia lokalna podąża za stanem w pamięci — także offline, żeby oceny wystawione
+  // bez sieci przeżyły zamknięcie aplikacji.
   useEffect(() => {
-    if (!userId || offline || hydratedFor !== userId) return;
+    if (!userId || hydratedFor !== userId) return;
     void cachePut(cacheKeys.srs(userId), store);
-  }, [store, userId, offline, hydratedFor]);
+  }, [store, userId, hydratedFor]);
 
   const getEntry = useCallback(
     (id: string): SRSEntry => normalizeEntry(store[id] ?? getDefaultEntry()),
     [store],
   );
 
-  const persist = useCallback((dealId: string, entry: SRSEntry) => {
-    if (!userId) return;
-    supabase.from('srs_progress')
-      .upsert(entryToRow(userId, dealId, entry), { onConflict: 'user_id,deal_id' })
-      .then(({ error }) => { if (error) console.error('SRS save failed:', error.message); });
-  }, [userId]);
-
-  const mutate = useCallback((id: string, compute: (prev: SRSEntry) => SRSEntry) => {
-    if (offline) return;
-    const next = compute(normalizeEntry(storeRef.current[id] ?? getDefaultEntry()));
-    const updated = { ...storeRef.current, [id]: next };
+  /** `entry: null` kasuje wpis w pamięci, a do bazy idzie wiersz „nowe" z godziną (O5). */
+  const write = useCallback((id: string, entry: SRSEntry | null) => {
+    const updated = { ...storeRef.current };
+    if (entry) updated[id] = entry; else delete updated[id];
     storeRef.current = updated;
     setStore(updated);
-    persist(id, next);
-  }, [persist, offline]);
+    dirtyRef.current.add(id);
+    if (userId) outboxPutSrs(userId, entryToRow(userId, id, entry ?? getDefaultEntry()));
+  }, [userId]);
 
   const applyResult = useCallback((id: string, correct: boolean) => {
-    mutate(id, prev => applyAnswer(prev, correct));
-  }, [mutate]);
+    write(id, applyAnswer(normalizeEntry(storeRef.current[id] ?? getDefaultEntry()), correct));
+  }, [write]);
 
   // Apply a rating computed from an explicit baseline (free-play anti-gaming):
   // re-rating always starts from the pre-visit snapshot, so it never accumulates.
   const applyFromSnapshot = useCallback((id: string, snapshot: SRSEntry, correct: boolean) => {
-    if (offline) return;
-    const next = applyAnswer(normalizeEntry(snapshot), correct);
-    const updated = { ...storeRef.current, [id]: next };
-    storeRef.current = updated;
-    setStore(updated);
-    persist(id, next);
-  }, [persist, offline]);
+    write(id, applyAnswer(normalizeEntry(snapshot), correct));
+  }, [write]);
 
   // Write a specific entry (used to revert a rating to a prior snapshot).
-  const setEntry = useCallback((id: string, entry: SRSEntry) => {
-    if (offline) return;
-    const updated = { ...storeRef.current, [id]: entry };
-    storeRef.current = updated;
-    setStore(updated);
-    persist(id, entry);
-  }, [persist, offline]);
+  const setEntry = useCallback((id: string, entry: SRSEntry) => write(id, entry), [write]);
 
-  const resetEntry = useCallback((id: string) => {
-    if (offline) return;
-    const { [id]: _removed, ...rest } = storeRef.current;
-    storeRef.current = rest;
-    setStore(rest);
-    if (userId) {
-      supabase.from('srs_progress').delete().eq('user_id', userId).eq('deal_id', id)
-        .then(({ error }) => { if (error) console.error('SRS reset failed:', error.message); });
-    }
-  }, [userId, offline]);
+  // Reset to NEW. Zapis, nie kasowanie wiersza: skasowany wiersz wskrzesiłaby
+  // spóźniona, wcześniejsza ocena z innego urządzenia.
+  const resetEntry = useCallback((id: string) => write(id, null), [write]);
 
-  // Wipe all of the user's SRS progress (every deal back to NEW).
+  // Wipe all of the user's SRS progress (every deal back to NEW). Wymaga sieci (O5):
+  // postęp znika dopiero, gdy baza potwierdzi skasowanie.
   const clearAll = useCallback(async () => {
     if (offline) return;
+    if (userId) {
+      const { error } = await supabase.from('srs_progress').delete().eq('user_id', userId);
+      if (error) { console.error('SRS clear-all failed:', error.message); return; }
+      outboxDrop(userId, 'srs');
+    }
     storeRef.current = {};
     setStore({});
-    if (!userId) return;
-    const { error } = await supabase.from('srs_progress').delete().eq('user_id', userId);
-    if (error) console.error('SRS clear-all failed:', error.message);
   }, [userId, offline]);
 
   return { getEntry, applyResult, applyFromSnapshot, setEntry, resetEntry, clearAll, store, loading };
