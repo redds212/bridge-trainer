@@ -109,6 +109,10 @@ export function useDeals() {
 
   // Konto, którego rozdania są już w pamięci — patrz ciche odświeżenie niżej.
   const loadedForRef = useRef<string | null>(null);
+  // Numer ostatniego wczytania. Wynik starszego wczytania jest porzucany: zapytanie
+  // wysłane przed zalogowaniem potrafi na telefonie bez sieci paść później, niż kopia
+  // lokalna zdąży się wczytać — i wtedy zamazywało listę pustą.
+  const loadSeqRef = useRef(0);
 
   /**
    * `silent`: to samo konto, zmienił się tylko stan sieci. Bez ekranu ładowania i bez
@@ -116,12 +120,23 @@ export function useDeals() {
    */
   const reload = useCallback(async (silent = false) => {
     if (silent && offline) return; // lista w pamięci jest tą samą, którą trzyma kopia
+    const seq = ++loadSeqRef.current;
+    const stale = () => seq !== loadSeqRef.current;
     if (!silent) setLoading(true);
+    // Nikt nie jest zalogowany: RLS i tak nie odda rozdań, więc nie ma o co pytać.
+    // `loading` zostaje zapalone, żeby tuż po zalogowaniu nie mignęła pusta lista.
+    if (!userId) {
+      loadedForRef.current = null;
+      setRecords([]);
+      setError(null);
+      return;
+    }
     // Bez sieci (albo gdy zapytanie nie doleci) rozdania idą z kopii zapisanej przy
     // ostatnim udanym wczytaniu — tylko do odczytu, patrz docs/OFFLINE_PLAN.md, O1.
     const fromCache = async () => {
       if (silent) return;
-      const cached = userId ? await cacheGet<DealRecord[]>(cacheKeys.deals(userId)) : null;
+      const cached = await cacheGet<DealRecord[]>(cacheKeys.deals(userId));
+      if (stale()) return;
       setError(cached ? null : 'Brak połączenia i brak zapisanej kopii rozdań.');
       setRecords(cached ?? []);
       if (cached) loadedForRef.current = userId;
@@ -133,6 +148,7 @@ export function useDeals() {
       supabase.from('deals').select('*').order('is_base', { ascending: false }).order('created_at', { ascending: true }),
       supabase.from('deal_tags').select('deal_id, tag_id'),
     ]);
+    if (stale()) return;
     if (isOfflineFailure(dealsRes.error) || isOfflineFailure(linksRes.error)) { await fromCache(); return; }
     if (dealsRes.error) {
       if (silent) return;
@@ -152,7 +168,7 @@ export function useDeals() {
       // Kopia tylko dla konta z dostępem i tylko z kompletem motywów — inaczej
       // nadpisalibyśmy dobrą kopię listą bez tagów albo pustą (RLS chowa rozdania
       // przed kontem niezatwierdzonym).
-      if (userId && user?.status === 'approved' && !linksRes.error) void cachePut(cacheKeys.deals(userId), fresh);
+      if (user?.status === 'approved' && !linksRes.error) void cachePut(cacheKeys.deals(userId), fresh);
     }
     setLoading(false);
   }, [userId, user?.status, offline]);
