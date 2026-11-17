@@ -6,6 +6,7 @@ import { DIFF_COLOR } from '../lib/difficulty';
 import { LoopMark } from './LoopMark';
 import { DifficultyFilter } from './DifficultyFilter';
 import { Icon } from './Icon';
+import { LogoutWarning } from './LogoutWarning';
 
 interface Props {
   deals: Deal[];
@@ -46,6 +47,15 @@ export function Sidebar({ deals, todayDeals, selectedId, getEntry, onSelect, que
   // oddaje ~80 px liście, gdy użytkownik przyszedł tu szukać, a nie powtarzać.
   // Stan lokalny (nie w `AppShell`): dotyczy wyłącznie wyglądu tego bloku.
   const [showToday, setShowToday] = useState(true);
+  // Wylogowanie wstrzymane przez niewysłane oceny (O7): liczba rozdań do ostrzeżenia.
+  const [unsent, setUnsent] = useState<number | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const tryLogout = async (force = false) => {
+    setLoggingOut(true);
+    const result = await logout({ force });
+    setLoggingOut(false);
+    setUnsent(result.unsent ?? null);
+  };
   // Filtry obejmują wyłącznie listę poniżej: rekomendacje i liczniki w stopce liczą
   // się z pełnego zbioru, żeby wpisana fraza ani wybrany poziom nie chowały tego, co
   // jest na dziś do powtórki, ani nie majstrowały przy statystykach (D1).
@@ -114,13 +124,22 @@ export function Sidebar({ deals, todayDeals, selectedId, getEntry, onSelect, que
             {/* Sama ikona: „Wyloguj" zjadało trzecią część rzędu przy foncie 10 px.
                 Bez etykiety obowiązkowe aria-label i tooltip. */}
             <button
-              onClick={logout}
+              onClick={() => { void tryLogout(); }}
+              disabled={loggingOut}
               aria-label="Wyloguj"
               title="Wyloguj"
-              className="flex flex-shrink-0 items-center justify-center w-7 py-[5px] rounded-[7px] bg-[rgba(224,82,77,.12)] text-[#e0524d] border border-[rgba(224,82,77,.3)] hover:bg-[rgba(224,82,77,.2)] transition-colors"
+              className="flex flex-shrink-0 items-center justify-center w-7 py-[5px] rounded-[7px] bg-[rgba(224,82,77,.12)] text-[#e0524d] border border-[rgba(224,82,77,.3)] hover:bg-[rgba(224,82,77,.2)] disabled:opacity-50 transition-colors"
             >
               <Icon name="logout" size={12} />
             </button>
+            {unsent !== null && (
+              <LogoutWarning
+                unsent={unsent}
+                busy={loggingOut}
+                onStay={() => setUnsent(null)}
+                onLogout={() => { void tryLogout(true); }}
+              />
+            )}
           </div>
         </div>
       )}

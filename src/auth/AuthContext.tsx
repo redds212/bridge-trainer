@@ -3,12 +3,14 @@ import { isAuthRetryableFetchError, type Session } from '@supabase/supabase-js';
 import { supabase, AUTH_STORAGE_KEY } from '../lib/supabase';
 import { isOfflineFailure } from '../lib/network';
 import { cacheGet, cachePut, cacheClearUser, cacheKeys, requestPersistentStorage } from '../lib/localCache';
-import { flushOutbox, outboxReset } from '../lib/outbox';
+import { flushOutbox, outboxPendingCount, outboxReset } from '../lib/outbox';
 import { DEFAULT_DAILY_TARGET } from '../lib/session';
 import type { AppUser, LearningMode } from '../types';
 
 interface AuthResult { error?: string }
 interface RegisterResult extends AuthResult { needsConfirmation?: boolean }
+/** `unsent`: wylogowanie wstrzymane, bo tyle rozdań ma oceny, których nie udało się wysłać. */
+export interface LogoutResult { unsent?: number }
 
 /** Tyle samo wymaga Supabase w domyślnej konfiguracji — walidujemy lokalnie, żeby nie strzelać do API po nic. */
 export const MIN_PASSWORD_LENGTH = 6;
@@ -36,7 +38,11 @@ interface AuthContextValue {
   recovery: boolean;
   login: (email: string, password: string) => Promise<AuthResult>;
   register: (email: string, username: string, password: string) => Promise<RegisterResult>;
-  logout: () => Promise<void>;
+  /**
+   * Bez `force` wylogowanie najpierw próbuje wysłać kolejkę; jeśli coś w niej zostaje,
+   * nic nie robi i zwraca `unsent` — interfejs pyta wtedy „Zostań / Wyloguj mimo to" (O7).
+   */
+  logout: (opts?: { force?: boolean }) => Promise<LogoutResult>;
   resetPassword: (email: string) => Promise<AuthResult>;
   /** Ustawia hasło w bieżącej sesji — ścieżka z linku resetu, bez pytania o stare. */
   setNewPassword: (password: string) => Promise<AuthResult>;
@@ -274,8 +280,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { needsConfirmation: !data.session }; // no session → email confirmation required
   }, []);
 
-  const logout = useCallback(async () => {
+  const logout = useCallback(async ({ force = false }: { force?: boolean } = {}): Promise<LogoutResult> => {
     const id = user?.id;
+    if (id && !force) {
+      // Z siecią najpierw wysyłka tego, co czeka (O7); bez sieci od razu liczymy straty.
+      if (!offline) await flushOutbox(id);
+      const unsent = await outboxPendingCount(id);
+      if (unsent > 0) return { unsent };
+    }
     const dropLocalSession = () => {
       try { localStorage.removeItem(AUTH_STORAGE_KEY); } catch { /* brak localStorage */ }
     };
@@ -285,8 +297,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // sesji z dysku nie usuwając. Usuwamy ją więc sami, od razu.
       dropLocalSession();
     } else {
-      // Z siecią: najpierw wysyłka tego, co czeka, dopiero potem wylogowanie (O7).
-      if (id) await flushOutbox(id);
       const { error } = await supabase.auth.signOut();
       if (error) {
         // Sieć padła w trakcie: z tego urządzenia sesja ma zniknąć mimo wszystko,
@@ -304,6 +314,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Bez tego rezygnacja z resetu zostawiałaby flagę zapaloną: kolejne logowanie
     // starym hasłem znowu lądowałoby na ekranie „ustaw nowe hasło".
     setRecovery(false);
+    return {};
   }, [user?.id, offline]);
 
   const resetPassword = useCallback(async (email: string): Promise<AuthResult> => {

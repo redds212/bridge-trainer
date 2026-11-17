@@ -1,9 +1,9 @@
 # Tryb offline — uzgodniony plan
 
 Stan: **plan zatwierdzony 2026-11-14. Etapy 1 i 2 wdrożone 2026-11-14 (migracja 0012,
-zapis `rated_at` i `client_id`, kopia lokalna). Etap 3 napisany 2026-11-15 i sprawdzony
-w Chrome z podstawionym Supabase; czeka na wdrożenie i test na iPhonie (lista kontrolna
-na końcu pliku). Etap 4: zostało ostrzeżenie przy wylogowaniu offline.**
+zapis `rated_at` i `client_id`, kopia lokalna). Etap 3 wdrożony 2026-11-15, test na
+iPhonie zaliczony 2026-11-17. Etap 4 (ostrzeżenie przy wylogowaniu) napisany 2026-11-17
+i sprawdzony w Chrome; czeka na wdrożenie i test na iPhonie (lista na końcu pliku).**
 Urządzenie docelowe: iPhone, aplikacja dodana do ekranu początkowego. Przerwy w sieci
 do 24–36 godzin.
 
@@ -203,8 +203,7 @@ Warunek: aplikacja dodana do ekranu początkowego i uruchamiana z ikony.
   - O8 — ocena rozdania usuniętego na stałe odpada przy wysyłce (błąd klucza obcego),
     reszta wsadu idzie dalej.
   - O4, O7 — cofnięty dostęp i wylogowanie kasują kolejkę razem z kopią; wylogowanie
-    z siecią najpierw wysyła kolejkę. Ostrzeżenie „masz N niewysłanych ocen" przy
-    wylogowaniu offline zostaje na etap 4.
+    z siecią najpierw wysyła kolejkę. Ostrzeżenie przy wylogowaniu — etap 4, niżej.
 
 ## Lista kontrolna iPhone — etap 3
 
@@ -227,3 +226,22 @@ Warunek: aplikacja uruchamiana z ikony, po wdrożeniu otwarta raz z siecią.
 9. Konflikt: w trybie samolotowym oceń na telefonie rozdanie X. Potem na komputerze oceń
    to samo rozdanie X inaczej. Wyłącz tryb samolotowy. Oczekiwane: na obu urządzeniach
    zostaje ocena z komputera (późniejsza), a w historii są oba podejścia.
+
+## Etap 4 — wylogowanie z niewysłanymi ocenami
+
+- Przycisk „Wyloguj" najpierw próbuje wysłać kolejkę (z siecią), potem liczy, co w niej
+  zostało. Pusta kolejka — wylogowanie od razu, jak dotąd.
+- Coś zostało (brak sieci albo błąd bazy): okno „Niewysłane oceny — oceny za N rozdań nie
+  dotarły jeszcze na serwer. Wylogowanie je skasuje." z przyciskami „Zostań" i „Wyloguj
+  mimo to". „Zostań" niczego nie rusza; „Wyloguj mimo to" kasuje kolejkę i kopię (O7).
+- Ekran „konto oczekuje na akceptację" i ekran nowego hasła wylogowują bez pytania — te
+  konta nie mają czego wysyłać.
+
+## Lista kontrolna iPhone — etap 4
+
+1. Z siecią: otwórz aplikację, wyloguj się i zaloguj ponownie. Oczekiwane: bez okna.
+2. Włącz tryb samolotowy, oceń dwa rozdania, wybierz „Wyloguj". Oczekiwane: okno
+   „Niewysłane oceny" z „2 rozdania".
+3. „Zostań". Oczekiwane: okno znika, pasek dalej pokazuje „2 do wysłania".
+4. Wyłącz tryb samolotowy, poczekaj aż pasek zniknie, wybierz „Wyloguj". Oczekiwane:
+   wylogowanie bez okna, a na komputerze oceny z punktu 2 są w historii.

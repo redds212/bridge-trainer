@@ -803,7 +803,7 @@ function PendingScreen({ username }: { username: string }) {
             {checking ? 'Sprawdzam…' : 'Sprawdź ponownie'}
           </button>
           <button
-            onClick={logout}
+            onClick={() => { void logout({ force: true }); }}
             className="px-5 py-2.5 bg-brand-soft hover:bg-brand-line/60 text-brand-text rounded-[9px] text-sm font-medium border border-brand-line transition-colors"
           >
             Wyloguj

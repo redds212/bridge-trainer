@@ -56,9 +56,14 @@ let inflight: Promise<FlushResult> | null = null;
 let state: OutboxState = { pending: 0, status: 'idle' };
 const listeners = new Set<() => void>();
 
+/** Ile rozdań ma niewysłane zapisy; sama migawka sesji liczy się jako 1. */
+function countPending(b: Outbox): number {
+  const deals = new Set([...Object.keys(b.srs), ...b.attempts.map(a => a.deal_id)]);
+  return deals.size || (b.session ? 1 : 0);
+}
+
 function emit() {
-  const deals = new Set([...Object.keys(box.srs), ...box.attempts.map(a => a.deal_id)]);
-  const pending = deals.size || (box.session ? 1 : 0);
+  const pending = countPending(box);
   const status: OutboxState['status'] =
     sending && stalled ? 'sending' : failure && pending > 0 ? failure : 'idle';
   if (pending === state.pending && status === state.status) return;
@@ -128,6 +133,11 @@ export async function outboxPending(userId: string): Promise<Outbox> {
   attach(userId);
   await ready;
   return owner === userId ? box : empty();
+}
+
+/** Liczba rozdań z niewysłanymi zapisami — do ostrzeżenia przy wylogowaniu (O7). */
+export async function outboxPendingCount(userId: string): Promise<number> {
+  return countPending(await outboxPending(userId));
 }
 
 /** Wylogowanie albo cofnięty dostęp: zebrane zapisy odpadają (O4, O7). Kopię w IndexedDB kasuje `cacheClearUser`. */

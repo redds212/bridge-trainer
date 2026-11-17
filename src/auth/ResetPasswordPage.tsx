@@ -84,7 +84,7 @@ export function ResetPasswordPage() {
           {saving ? 'Zapisywanie…' : 'Zapisz hasło'}
         </button>
 
-        <button type="button" onClick={logout} className="w-full text-[11px] text-brand-dim hover:text-brand-text">
+        <button type="button" onClick={() => { void logout({ force: true }); }} className="w-full text-[11px] text-brand-dim hover:text-brand-text">
           Anuluj i wyloguj się
         </button>
       </form>
