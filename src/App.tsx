@@ -12,6 +12,7 @@ import { useDealTimer, timeLimitForLevel } from './hooks/useDealTimer';
 import { useHistory } from './hooks/useHistory';
 import { useSettings } from './hooks/useSettings';
 import { useOutbox } from './hooks/useOutbox';
+import { useAppUpdate } from './hooks/useAppUpdate';
 import { useDailySession, resumeLabel, type SessionProgress } from './hooks/useDailySession';
 import { filterDeals } from './lib/dealSearch';
 import type { DailySession } from './lib/session';
@@ -285,6 +286,9 @@ export function TrainerApp({ deals, selectedId, onSelectId, srs, recordHistory, 
   // początku), na ekranie powitalnym. Sesja zostaje wstrzymana na czas przerwy.
   const midDeal = !!selectedDeal && !!state && state.phase !== 'rated'
     && !(state.phase === 'intro' && state.currentStep === 0 && !state.isAnimating);
+  // Nowa wersja aplikacji wchodzi przeładowaniem tylko wtedy, gdy nic nie jest w toku.
+  useAppUpdate(!midDeal && !session.active);
+
   useEffect(() => {
     if (pomodoro.phase !== 'wrapup' || midDeal) return;
     if (session.active) session.pause();
